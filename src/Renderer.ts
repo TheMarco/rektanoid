@@ -112,18 +112,15 @@ export class Renderer {
     this.camera.position.set(0, 0, camZ);
     this.camera.lookAt(0, 0, 0);
 
-    // WebGL renderer
+    // WebGL renderer — size is set in resize()
     this.webgl = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    this.webgl.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.webgl.setSize(GAME_WIDTH, GAME_HEIGHT, false);
+    this.webgl.setPixelRatio(1); // we manage resolution ourselves
     this.webgl.toneMapping = THREE.ACESFilmicToneMapping;
     this.webgl.toneMappingExposure = initialTheme.exposure;
     container.appendChild(this.webgl.domElement);
 
     // Post-processing
     this.composer = new EffectComposer(this.webgl);
-    this.composer.setSize(GAME_WIDTH, GAME_HEIGHT);
-    this.composer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.bloom = new UnrealBloomPass(
       new THREE.Vector2(GAME_WIDTH, GAME_HEIGHT),
@@ -133,7 +130,6 @@ export class Renderer {
     );
     this.composer.addPass(this.bloom);
     this.crt = createCRTPass();
-    this.crt.uniforms.resolution.value.set(GAME_WIDTH, GAME_HEIGHT);
     this.composer.addPass(this.crt);
     this.composer.addPass(new OutputPass());
 
@@ -1078,6 +1074,15 @@ export class Renderer {
     const scale = Math.min(w / GAME_WIDTH, h / GAME_HEIGHT);
     const cw = GAME_WIDTH * scale;
     const ch = GAME_HEIGHT * scale;
+
+    // Render at actual displayed pixel resolution for crisp CRT
+    const pr = Math.min(window.devicePixelRatio, 2);
+    const renderW = Math.round(cw * pr);
+    const renderH = Math.round(ch * pr);
+    this.webgl.setSize(renderW, renderH, false);
+    this.composer.setSize(renderW, renderH);
+    this.bloom.resolution.set(renderW, renderH);
+    this.crt.uniforms.resolution.value.set(renderW, renderH);
 
     const canvas = this.webgl.domElement;
     canvas.style.width = `${cw}px`;
