@@ -4,7 +4,6 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { GAME_WIDTH, GAME_HEIGHT } from './constants';
-import { MODELS } from 'retrozone';
 import type { BrickDefinition } from './types/BrickDefinition';
 
 const HW = GAME_WIDTH / 2;
@@ -775,45 +774,6 @@ export class Renderer {
         fog: false, toneMapped: false,
       }));
     glow.scale.y = 3;
-    glow.renderOrder = 4;
-    group.add(glow);
-
-    return group;
-  }
-
-  // ── RetroZone model → Three.js ──
-  modelToMesh(modelName: string, color: number, scale: number): THREE.Group {
-    const model = MODELS[modelName];
-    if (!model) return new THREE.Group();
-
-    const positions: number[] = [];
-    for (const line of model) {
-      positions.push(line.from[0], line.from[1], line.from[2] || 0);
-      positions.push(line.to[0], line.to[1], line.to[2] || 0);
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    const thickGeo = thickenGeo(geo, 0.07, 2);
-
-    const group = new THREE.Group();
-    group.scale.setScalar(scale);
-
-    const core = new THREE.LineSegments(thickGeo,
-      new THREE.LineBasicMaterial({
-        color, transparent: true, opacity: 0.7,
-        fog: false, toneMapped: false,
-      }));
-    core.renderOrder = 5;
-    group.add(core);
-
-    const glow = new THREE.LineSegments(thickGeo.clone(),
-      new THREE.LineBasicMaterial({
-        color, transparent: true, opacity: 0.2,
-        blending: THREE.AdditiveBlending,
-        depthTest: false, depthWrite: false,
-        fog: false, toneMapped: false,
-      }));
-    glow.scale.setScalar(1.05);
     glow.renderOrder = 4;
     group.add(glow);
 

@@ -9,7 +9,6 @@
   },
   "dependencies": {
     "phaser": "^3.87.0",
-    "retrozone": "file:../retrozone",
     "three": "^0.183.2"
   },
   "devDependencies": {
