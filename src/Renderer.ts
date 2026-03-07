@@ -3,7 +3,9 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { GAME_WIDTH, GAME_HEIGHT } from './constants';
+import { createCRTPass } from './CRTPass';
 import type { BrickDefinition } from './types/BrickDefinition';
 
 const HW = GAME_WIDTH / 2;
@@ -65,16 +67,16 @@ const LEVEL_THEMES: {
   bloomRadius: number;
   exposure: number;
 }[] = [
-  { bg: 0x010a06, fog: 0x021a0c, accent: 0x00ff88, fogDensity: 0.0017, bloomStrength: 0.35, bloomRadius: 0.40, exposure: 1.15 }, // Genesis Block
-  { bg: 0x010a06, fog: 0x021a0c, accent: 0x00ff88, fogDensity: 0.0016, bloomStrength: 0.37, bloomRadius: 0.42, exposure: 1.15 }, // Bull Trap
-  { bg: 0x0a0204, fog: 0x1a0508, accent: 0xff2222, fogDensity: 0.00195, bloomStrength: 0.40, bloomRadius: 0.44, exposure: 1.12 }, // Liquidation
-  { bg: 0x0a0800, fog: 0x1a1000, accent: 0xffaa00, fogDensity: 0.00175, bloomStrength: 0.38, bloomRadius: 0.42, exposure: 1.18 }, // Pump & Dump
-  { bg: 0x020810, fog: 0x041420, accent: 0x44ddff, fogDensity: 0.00185, bloomStrength: 0.38, bloomRadius: 0.42, exposure: 1.16 }, // Diamond
-  { bg: 0x0a0204, fog: 0x1a0508, accent: 0xff2222, fogDensity: 0.002, bloomStrength: 0.42, bloomRadius: 0.46, exposure: 1.10 }, // Bear Market
-  { bg: 0x060804, fog: 0x0c1008, accent: 0xffaa00, fogDensity: 0.0017, bloomStrength: 0.36, bloomRadius: 0.40, exposure: 1.15 }, // Halving
-  { bg: 0x020810, fog: 0x041420, accent: 0x44ddff, fogDensity: 0.0019, bloomStrength: 0.40, bloomRadius: 0.44, exposure: 1.14 }, // DeFi Maze
-  { bg: 0x0a0204, fog: 0x1a0508, accent: 0xff2222, fogDensity: 0.0021, bloomStrength: 0.44, bloomRadius: 0.46, exposure: 1.10 }, // Margin Call
-  { bg: 0x060210, fog: 0x0c0420, accent: 0x8844ff, fogDensity: 0.0018, bloomStrength: 0.42, bloomRadius: 0.44, exposure: 1.17 }, // Flippening
+  { bg: 0x010a06, fog: 0x021a0c, accent: 0x00ff88, fogDensity: 0.0013, bloomStrength: 0.55, bloomRadius: 0.50, exposure: 1.25 }, // Genesis Block
+  { bg: 0x010a06, fog: 0x021a0c, accent: 0x00ff88, fogDensity: 0.0012, bloomStrength: 0.58, bloomRadius: 0.52, exposure: 1.25 }, // Bull Trap
+  { bg: 0x0a0204, fog: 0x1a0508, accent: 0xff2222, fogDensity: 0.0015, bloomStrength: 0.62, bloomRadius: 0.54, exposure: 1.22 }, // Liquidation
+  { bg: 0x0a0800, fog: 0x1a1000, accent: 0xffaa00, fogDensity: 0.0013, bloomStrength: 0.58, bloomRadius: 0.52, exposure: 1.28 }, // Pump & Dump
+  { bg: 0x020810, fog: 0x041420, accent: 0x44ddff, fogDensity: 0.0014, bloomStrength: 0.58, bloomRadius: 0.52, exposure: 1.26 }, // Diamond
+  { bg: 0x0a0204, fog: 0x1a0508, accent: 0xff2222, fogDensity: 0.0015, bloomStrength: 0.65, bloomRadius: 0.56, exposure: 1.20 }, // Bear Market
+  { bg: 0x060804, fog: 0x0c1008, accent: 0xffaa00, fogDensity: 0.0013, bloomStrength: 0.55, bloomRadius: 0.50, exposure: 1.25 }, // Halving
+  { bg: 0x020810, fog: 0x041420, accent: 0x44ddff, fogDensity: 0.0014, bloomStrength: 0.62, bloomRadius: 0.54, exposure: 1.24 }, // DeFi Maze
+  { bg: 0x0a0204, fog: 0x1a0508, accent: 0xff2222, fogDensity: 0.0016, bloomStrength: 0.68, bloomRadius: 0.56, exposure: 1.20 }, // Margin Call
+  { bg: 0x060210, fog: 0x0c0420, accent: 0x8844ff, fogDensity: 0.0014, bloomStrength: 0.65, bloomRadius: 0.54, exposure: 1.27 }, // Flippening
 ];
 
 export class Renderer {
@@ -83,6 +85,7 @@ export class Renderer {
   webgl: THREE.WebGLRenderer;
   composer: EffectComposer;
   bloom: UnrealBloomPass;
+  crt: ShaderPass;
   bgGroup: THREE.Group;
   fxGroup: THREE.Group;
   private container: HTMLElement;
@@ -129,6 +132,9 @@ export class Renderer {
       0.03,  // threshold
     );
     this.composer.addPass(this.bloom);
+    this.crt = createCRTPass();
+    this.crt.uniforms.resolution.value.set(GAME_WIDTH, GAME_HEIGHT);
+    this.composer.addPass(this.crt);
     this.composer.addPass(new OutputPass());
 
     // Groups
@@ -1061,6 +1067,7 @@ export class Renderer {
 
   // ── Render ──
   render() {
+    this.crt.uniforms.time.value = performance.now() * 0.001;
     this.composer.render();
   }
 

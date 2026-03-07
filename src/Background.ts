@@ -120,8 +120,8 @@ function thickenLineSegmentPositions(input: number[], halfWidth: number, steps: 
   return out;
 }
 
-const WALL_THICK_WIDTH = 0.05;
-const WALL_THICK_STEPS = 1;
+const WALL_THICK_WIDTH = 0.09;
+const WALL_THICK_STEPS = 2;
 
 function buildMesh(positions: number[], color: number, coreOpacity = 0.5, glowOpacity = 0.18): THREE.Group {
   const group = new THREE.Group();
@@ -1086,7 +1086,7 @@ const DEFAULTS: CaveConfig = {
   color: 0x00ff88, seed: 42, centerY: 40, baseRadius: 380,
   depthLayers: 8, depthSpacing: 70, samples: 60, jaggedness: 1.0,
   connectStride: 4, stalactiteDensity: 0.25, rockDetailDensity: 0.2,
-  coreOpacity: 0.25, glowOpacity: 0.10, depthFade: 0.12,
+  coreOpacity: 0.45, glowOpacity: 0.22, depthFade: 0.09,
 };
 
 const CAVE_X_MIN = -HW - 120;
@@ -1153,27 +1153,28 @@ function buildLevel0(group: THREE.Group) {
     color: 0x1199aa, accentColor: 0x22ccdd, seed: 100, baseRadius: 420,
     jaggedness: 0.4, depthLayers: 6, depthSpacing: 85, connectStride: 5,
     stalactiteDensity: 0.08, rockDetailDensity: 0.08, samples: 40,
+    coreOpacity: 0.40, glowOpacity: 0.18, depthFade: 0.07,
   });
 
   // Massive Bitcoin symbol centerpiece
   const btcPos: number[] = [];
   buildGiantBitcoin(btcPos, 0, 20, -150, 180);
-  group.add(buildMesh(btcPos, 0x44eeff, 0.28, 0.14));
+  group.add(buildMesh(btcPos, 0x44eeff, 0.50, 0.28));
 
   // Floating blockchain blocks at various depths
   const blockPos: number[] = [];
   buildBlockchainBlocks(blockPos, 100, 16, 800, 600, -60, -350, 35);
-  group.add(buildMesh(blockPos, 0x22ccdd, 0.24, 0.12));
+  group.add(buildMesh(blockPos, 0x22ccdd, 0.43, 0.24));
 
   // Hash stream (genesis block data)
   const hashPos: number[] = [];
   buildHashStream(hashPos, 103, -350, 350, -100, -250, 4);
-  group.add(buildMesh(hashPos, 0x1199aa, 0.16, 0.07));
+  group.add(buildMesh(hashPos, 0x1199aa, 0.29, 0.14));
 
   // Data rain in the background
   const rainPos: number[] = [];
   buildDataRain(rainPos, 101, 35, 900, 380, -380, -200);
-  group.add(buildMesh(rainPos, 0x22bbcc, 0.14, 0.06));
+  group.add(buildMesh(rainPos, 0x22bbcc, 0.25, 0.12));
 
   // Scatter bitcoin symbols (larger)
   const symPos: number[] = [];
@@ -1181,7 +1182,7 @@ function buildLevel0(group: THREE.Group) {
   for (let i = 0; i < 6; i++) {
     bitcoinSymbol(symPos, (rng() - 0.5) * 700, (rng() - 0.5) * 450, -80 - rng() * 200, 22 + rng() * 20);
   }
-  group.add(buildMesh(symPos, 0x55eeff, 0.20, 0.09));
+  group.add(buildMesh(symPos, 0x55eeff, 0.36, 0.18));
 }
 
 /** Level 1: Bull Trap — giant bull horns, pump chart with volume, rocket trails */
@@ -1190,38 +1191,39 @@ function buildLevel1(group: THREE.Group) {
     color: 0x11aa44, accentColor: 0x44ff88, seed: 200, centerY: 60,
     baseRadius: 400, jaggedness: 0.6, depthLayers: 7, depthSpacing: 75,
     stalactiteDensity: 0.15, rockDetailDensity: 0.12, connectStride: 4,
+    coreOpacity: 0.40, glowOpacity: 0.18, depthFade: 0.07,
   });
 
   // Giant bull horns centerpiece (bigger)
   const hornPos: number[] = [];
   buildBullHorns(hornPos, 0, 10, -140, 200);
-  group.add(buildMesh(hornPos, 0x44ff88, 0.30, 0.14));
+  group.add(buildMesh(hornPos, 0x44ff88, 0.54, 0.28));
 
   // Smaller bull horns scattered
   const horn2Pos: number[] = [];
   buildBullHorns(horn2Pos, -280, 80, -280, 85);
   buildBullHorns(horn2Pos, 300, -30, -250, 70);
-  group.add(buildMesh(horn2Pos, 0x22cc66, 0.18, 0.08));
+  group.add(buildMesh(horn2Pos, 0x22cc66, 0.32, 0.16));
 
   // Massive rising chart with volume bars
   const chartPos: number[] = [];
   buildGiantChart(chartPos, 201, -400, 400, -30, 250, -200, 30);
-  group.add(buildMesh(chartPos, 0x00ff44, 0.20, 0.09));
+  group.add(buildMesh(chartPos, 0x00ff44, 0.36, 0.18));
 
   // Volume bars underneath chart
   const volPos: number[] = [];
   buildVolumeBars(volPos, 204, -400, 400, -250, -200, 30, 80);
-  group.add(buildMesh(volPos, 0x22cc66, 0.14, 0.06));
+  group.add(buildMesh(volPos, 0x22cc66, 0.25, 0.12));
 
   // Rocket trails (things going up!)
   const rocketPos: number[] = [];
   buildRocketTrails(rocketPos, 202, 4, 700, -220, -300);
-  group.add(buildMesh(rocketPos, 0x88ffaa, 0.16, 0.07));
+  group.add(buildMesh(rocketPos, 0x88ffaa, 0.29, 0.14));
 
   // Order book in corner
   const obPos: number[] = [];
   buildOrderBook(obPos, 203, -250, 60, -320, 120, 8);
-  group.add(buildMesh(obPos, 0x33dd77, 0.12, 0.05));
+  group.add(buildMesh(obPos, 0x33dd77, 0.22, 0.10));
 }
 
 /** Level 2: Liquidation Cascade — lightning, crashing chart, order book collapse, hash chaos */
@@ -1230,38 +1232,38 @@ function buildLevel2(group: THREE.Group) {
     color: 0x882233, accentColor: 0xcc3344, seed: 300, centerY: 30,
     baseRadius: 340, jaggedness: 1.8, depthLayers: 12, depthSpacing: 42,
     connectStride: 2, stalactiteDensity: 0.55, rockDetailDensity: 0.45,
-    samples: 80, coreOpacity: 0.28, glowOpacity: 0.12,
+    samples: 80, coreOpacity: 0.42, glowOpacity: 0.18, depthFade: 0.07,
   });
 
   // Lightning bolts (liquidation strikes!) — more and closer
   const boltPos: number[] = [];
   buildLightningBolts(boltPos, 300, 12, 800, 380, -380, -80);
-  group.add(buildMesh(boltPos, 0xff4444, 0.30, 0.14));
+  group.add(buildMesh(boltPos, 0xff4444, 0.54, 0.28));
 
   // More lightning deeper
   const bolt2Pos: number[] = [];
   buildLightningBolts(bolt2Pos, 301, 6, 600, 300, -300, -220);
-  group.add(buildMesh(bolt2Pos, 0xcc2233, 0.18, 0.08));
+  group.add(buildMesh(bolt2Pos, 0xcc2233, 0.32, 0.16));
 
   // Massive waterfall staircase chart
   const stairPos: number[] = [];
   buildStaircaseChart(stairPos, 302, -380, 380, 260, -150, 10);
-  group.add(buildMesh(stairPos, 0xff6644, 0.22, 0.10));
+  group.add(buildMesh(stairPos, 0xff6644, 0.40, 0.20));
 
   // Order book (collapsing)
   const obPos: number[] = [];
   buildOrderBook(obPos, 305, 200, 30, -280, 140, 10);
-  group.add(buildMesh(obPos, 0xff4433, 0.16, 0.07));
+  group.add(buildMesh(obPos, 0xff4433, 0.29, 0.14));
 
   // Warning patterns scattered — more prominent
   const warnPos: number[] = [];
   buildWarningPatterns(warnPos, 303, 12, 700, 500, -180);
-  group.add(buildMesh(warnPos, 0xff3333, 0.22, 0.10));
+  group.add(buildMesh(warnPos, 0xff3333, 0.40, 0.20));
 
   // Data rain (falling prices) — denser
   const rainPos: number[] = [];
   buildDataRain(rainPos, 304, 50, 800, 350, -350, -120);
-  group.add(buildMesh(rainPos, 0xcc3344, 0.14, 0.06));
+  group.add(buildMesh(rainPos, 0xcc3344, 0.25, 0.12));
 }
 
 /** Level 3: Pump & Dump — rockets, giant chart with volume, dollar signs, order book */
@@ -1270,27 +1272,28 @@ function buildLevel3(group: THREE.Group) {
     color: 0xaa7722, accentColor: 0xddaa33, seed: 400, centerY: 50,
     baseRadius: 380, jaggedness: 0.9, depthLayers: 8, depthSpacing: 65,
     stalactiteDensity: 0.25, connectStride: 3,
+    coreOpacity: 0.40, glowOpacity: 0.18, depthFade: 0.07,
   });
 
   // Massive rocket trails (pump phase) — bigger
   const rocketPos: number[] = [];
   buildRocketTrails(rocketPos, 400, 6, 800, -220, -140);
-  group.add(buildMesh(rocketPos, 0xffcc44, 0.26, 0.12));
+  group.add(buildMesh(rocketPos, 0xffcc44, 0.47, 0.24));
 
   // Giant candlestick chart
   const chartPos: number[] = [];
   buildGiantChart(chartPos, 401, -420, 420, 20, 280, -200, 22);
-  group.add(buildMesh(chartPos, 0xddaa33, 0.22, 0.10));
+  group.add(buildMesh(chartPos, 0xddaa33, 0.40, 0.20));
 
   // Volume bars
   const volPos: number[] = [];
   buildVolumeBars(volPos, 405, -420, 420, -200, -200, 22, 90);
-  group.add(buildMesh(volPos, 0xcc8822, 0.16, 0.07));
+  group.add(buildMesh(volPos, 0xcc8822, 0.29, 0.14));
 
   // Giant dollar sign
   const dollarPos: number[] = [];
   buildGiantDollar(dollarPos, -200, 40, -280, 120);
-  group.add(buildMesh(dollarPos, 0xffcc44, 0.20, 0.09));
+  group.add(buildMesh(dollarPos, 0xffcc44, 0.36, 0.18));
 
   // Dollar signs scattered (larger)
   const symPos: number[] = [];
@@ -1298,12 +1301,12 @@ function buildLevel3(group: THREE.Group) {
   for (let i = 0; i < 8; i++) {
     dollarSymbol(symPos, (rng() - 0.5) * 700, (rng() - 0.5) * 500, -60 - rng() * 250, 24 + rng() * 22);
   }
-  group.add(buildMesh(symPos, 0xffaa00, 0.18, 0.08));
+  group.add(buildMesh(symPos, 0xffaa00, 0.32, 0.16));
 
   // Order book
   const obPos: number[] = [];
   buildOrderBook(obPos, 403, 220, -40, -320, 130, 9);
-  group.add(buildMesh(obPos, 0xddaa33, 0.12, 0.05));
+  group.add(buildMesh(obPos, 0xddaa33, 0.22, 0.10));
 }
 
 /** Level 4: Diamond Formation — massive ETH diamond, crystals, liquidity pools */
@@ -1312,29 +1315,29 @@ function buildLevel4(group: THREE.Group) {
     color: 0x2288cc, accentColor: 0x66bbff, seed: 500, centerY: 40,
     baseRadius: 370, jaggedness: 1.5, depthLayers: 9, depthSpacing: 55,
     stalactiteDensity: 0.45, rockDetailDensity: 0.35, connectStride: 2,
-    samples: 85, coreOpacity: 0.22, glowOpacity: 0.09,
+    samples: 85, coreOpacity: 0.40, glowOpacity: 0.18, depthFade: 0.07,
   });
 
   // Massive Ethereum diamond centerpiece
   const ethPos: number[] = [];
   buildGiantEth(ethPos, 0, 20, -130, 190);
-  group.add(buildMesh(ethPos, 0x66ccff, 0.30, 0.14));
+  group.add(buildMesh(ethPos, 0x66ccff, 0.54, 0.28));
 
   // Crystal formations throughout (more, bigger)
   const crystalPos: number[] = [];
   buildCrystals(crystalPos, 500, 25, 900, 650, -40, -350, [30, 80]);
-  group.add(buildMesh(crystalPos, 0x44bbff, 0.22, 0.10));
+  group.add(buildMesh(crystalPos, 0x44bbff, 0.40, 0.20));
 
   // Liquidity pools
   const poolPos: number[] = [];
   buildLiquidityPool(poolPos, -250, 50, -220, 80, 5);
   buildLiquidityPool(poolPos, 280, -40, -260, 65, 4);
-  group.add(buildMesh(poolPos, 0x55ddff, 0.20, 0.09));
+  group.add(buildMesh(poolPos, 0x55ddff, 0.36, 0.18));
 
   // Wallet/key shape
   const keyPos: number[] = [];
   buildWalletKey(keyPos, 200, 100, -350, 100);
-  group.add(buildMesh(keyPos, 0x3399dd, 0.14, 0.06));
+  group.add(buildMesh(keyPos, 0x3399dd, 0.25, 0.12));
 
   // Scatter eth symbols (larger)
   const symPos: number[] = [];
@@ -1342,12 +1345,12 @@ function buildLevel4(group: THREE.Group) {
   for (let i = 0; i < 8; i++) {
     ethSymbol(symPos, (rng() - 0.5) * 700, (rng() - 0.5) * 500, -80 - rng() * 200, 20 + rng() * 18);
   }
-  group.add(buildMesh(symPos, 0x55ccff, 0.18, 0.08));
+  group.add(buildMesh(symPos, 0x55ccff, 0.32, 0.16));
 
   // Hash stream (smart contracts)
   const hashPos: number[] = [];
   buildHashStream(hashPos, 503, -300, 300, -120, -300, 3);
-  group.add(buildMesh(hashPos, 0x2288cc, 0.12, 0.05));
+  group.add(buildMesh(hashPos, 0x2288cc, 0.22, 0.10));
 }
 
 /** Level 5: Bear Market — massive claw marks, crashing chart, skulls, collapsed order book */
@@ -1356,44 +1359,44 @@ function buildLevel5(group: THREE.Group) {
     color: 0x661122, accentColor: 0x992233, seed: 600, centerY: 10,
     baseRadius: 320, jaggedness: 1.5, depthLayers: 13, depthSpacing: 40,
     stalactiteDensity: 0.55, rockDetailDensity: 0.45, connectStride: 2,
-    samples: 70, coreOpacity: 0.28, glowOpacity: 0.12,
+    samples: 70, coreOpacity: 0.42, glowOpacity: 0.18, depthFade: 0.07,
   });
 
   // Bear claw marks slashing across the scene — bigger, closer
   const clawPos: number[] = [];
   buildClawMarks(clawPos, 600, 14, 800, 550, -100);
-  group.add(buildMesh(clawPos, 0xff3344, 0.32, 0.15));
+  group.add(buildMesh(clawPos, 0xff3344, 0.58, 0.30));
 
   // More claws deeper
   const claw2Pos: number[] = [];
   buildClawMarks(claw2Pos, 601, 8, 700, 450, -250);
-  group.add(buildMesh(claw2Pos, 0xcc2233, 0.18, 0.08));
+  group.add(buildMesh(claw2Pos, 0xcc2233, 0.32, 0.16));
 
   // Massive descending staircase chart
   const stairPos: number[] = [];
   buildStaircaseChart(stairPos, 602, -400, 400, 280, -140, 12);
-  group.add(buildMesh(stairPos, 0xff4455, 0.24, 0.11));
+  group.add(buildMesh(stairPos, 0xff4455, 0.43, 0.22));
 
   // Collapsed order book
   const obPos: number[] = [];
   buildOrderBook(obPos, 604, -200, -20, -250, 130, 10);
-  group.add(buildMesh(obPos, 0xcc3344, 0.16, 0.07));
+  group.add(buildMesh(obPos, 0xcc3344, 0.29, 0.14));
 
   // Warning symbols — more
   const warnPos: number[] = [];
   buildWarningPatterns(warnPos, 603, 10, 600, 450, -200);
-  group.add(buildMesh(warnPos, 0xff4455, 0.18, 0.08));
+  group.add(buildMesh(warnPos, 0xff4455, 0.32, 0.16));
 
   // Giant skull centerpiece
   const skullPos: number[] = [];
   buildSkull(skullPos, 0, 30, -160, 90);
-  group.add(buildMesh(skullPos, 0xff3344, 0.22, 0.10));
+  group.add(buildMesh(skullPos, 0xff3344, 0.40, 0.20));
 
   // Smaller skulls scattered
   const skull2Pos: number[] = [];
   buildSkull(skull2Pos, -250, 60, -300, 50);
   buildSkull(skull2Pos, 270, -30, -320, 45);
-  group.add(buildMesh(skull2Pos, 0x993344, 0.14, 0.06));
+  group.add(buildMesh(skull2Pos, 0x993344, 0.25, 0.12));
 }
 
 /** Level 6: The Halving — giant BTC symbol split, halving blocks, hash streams */
@@ -1402,12 +1405,13 @@ function buildLevel6(group: THREE.Group) {
     color: 0x6644aa, accentColor: 0xddaa44, seed: 700, centerY: 45,
     baseRadius: 400, jaggedness: 0.5, depthLayers: 7, depthSpacing: 80,
     connectStride: 4, stalactiteDensity: 0.12, rockDetailDensity: 0.08,
+    coreOpacity: 0.40, glowOpacity: 0.18, depthFade: 0.07,
   });
 
   // Halving blocks visualization (bigger)
   const halvPos: number[] = [];
   buildHalvingBlocks(halvPos, 700, -400, 400, 30, -160);
-  group.add(buildMesh(halvPos, 0xddaa44, 0.26, 0.12));
+  group.add(buildMesh(halvPos, 0xddaa44, 0.47, 0.24));
 
   // Central vertical dividing line (the halving split) — more dramatic
   const divPos: number[] = [];
@@ -1418,23 +1422,23 @@ function buildLevel6(group: THREE.Group) {
     const y = -380 + d * 32;
     line(divPos, -12, y, -80, 12, y, -80);
   }
-  group.add(buildMesh(divPos, 0xffcc44, 0.24, 0.11));
+  group.add(buildMesh(divPos, 0xffcc44, 0.43, 0.22));
 
   // Giant BTC symbol on left
   const btcPos: number[] = [];
   buildGiantBitcoin(btcPos, -220, 30, -220, 120);
-  group.add(buildMesh(btcPos, 0xaa88ff, 0.22, 0.10));
+  group.add(buildMesh(btcPos, 0xaa88ff, 0.40, 0.20));
 
   // Giant ETH on right
   const ethPos: number[] = [];
   buildGiantEth(ethPos, 220, 30, -220, 110);
-  group.add(buildMesh(ethPos, 0xddaa44, 0.22, 0.10));
+  group.add(buildMesh(ethPos, 0xddaa44, 0.40, 0.20));
 
   // Hash streams (mining computation)
   const hashPos: number[] = [];
   buildHashStream(hashPos, 702, -350, -50, 100, -300, 3);
   buildHashStream(hashPos, 703, 50, 350, 100, -300, 3);
-  group.add(buildMesh(hashPos, 0x8866cc, 0.14, 0.06));
+  group.add(buildMesh(hashPos, 0x8866cc, 0.25, 0.12));
 
   // Scattered symbols
   const symPos: number[] = [];
@@ -1443,7 +1447,7 @@ function buildLevel6(group: THREE.Group) {
     bitcoinSymbol(symPos, -150 - rng() * 200, (rng() - 0.5) * 400, -100 - rng() * 180, 24 + rng() * 16);
     ethSymbol(symPos, 150 + rng() * 200, (rng() - 0.5) * 400, -100 - rng() * 180, 22 + rng() * 16);
   }
-  group.add(buildMesh(symPos, 0xbb99dd, 0.16, 0.07));
+  group.add(buildMesh(symPos, 0xbb99dd, 0.29, 0.14));
 }
 
 /** Level 7: DeFi Maze — circuit boards, network nodes, liquidity pools, hash streams */
@@ -1452,45 +1456,45 @@ function buildLevel7(group: THREE.Group) {
     color: 0x1155ee, accentColor: 0x33aaff, seed: 800, centerY: 35,
     baseRadius: 350, jaggedness: 1.8, depthLayers: 11, depthSpacing: 45,
     stalactiteDensity: 0.40, rockDetailDensity: 0.45, connectStride: 2,
-    samples: 90, coreOpacity: 0.22, glowOpacity: 0.09,
+    samples: 90, coreOpacity: 0.40, glowOpacity: 0.18, depthFade: 0.07,
   });
 
   // Circuit board traces — denser, closer
   const circPos: number[] = [];
   buildCircuitTraces(circPos, 800, 25, 800, 550, -100);
-  group.add(buildMesh(circPos, 0x33aaff, 0.26, 0.12));
+  group.add(buildMesh(circPos, 0x33aaff, 0.47, 0.24));
 
   const circ2Pos: number[] = [];
   buildCircuitTraces(circ2Pos, 801, 15, 650, 450, -250);
-  group.add(buildMesh(circ2Pos, 0x2266cc, 0.16, 0.07));
+  group.add(buildMesh(circ2Pos, 0x2266cc, 0.29, 0.14));
 
   // Network graph (DeFi protocol connections) — more nodes
   const netPos: number[] = [];
   buildNetworkGraph(netPos, 802, 35, 800, 550, -180, 160);
-  group.add(buildMesh(netPos, 0x44ccff, 0.22, 0.10));
+  group.add(buildMesh(netPos, 0x44ccff, 0.40, 0.20));
 
   // Liquidity pools
   const poolPos: number[] = [];
   buildLiquidityPool(poolPos, -200, 60, -160, 90, 6);
   buildLiquidityPool(poolPos, 230, -40, -200, 75, 5);
   buildLiquidityPool(poolPos, 0, -80, -300, 60, 4);
-  group.add(buildMesh(poolPos, 0x55ddff, 0.20, 0.09));
+  group.add(buildMesh(poolPos, 0x55ddff, 0.36, 0.18));
 
   // Hash streams (smart contracts executing)
   const hashPos: number[] = [];
   buildHashStream(hashPos, 804, -380, 380, -60, -280, 4);
-  group.add(buildMesh(hashPos, 0x2288dd, 0.14, 0.06));
+  group.add(buildMesh(hashPos, 0x2288dd, 0.25, 0.12));
 
   // Data streams
   const dataPos: number[] = [];
   buildDataRain(dataPos, 803, 45, 800, 350, -350, -140);
-  group.add(buildMesh(dataPos, 0x1155ee, 0.14, 0.06));
+  group.add(buildMesh(dataPos, 0x1155ee, 0.25, 0.12));
 
   // Wallet keys (access to protocols)
   const keyPos: number[] = [];
   buildWalletKey(keyPos, -280, -60, -350, 80);
   buildWalletKey(keyPos, 300, 100, -380, 70);
-  group.add(buildMesh(keyPos, 0x3388cc, 0.12, 0.05));
+  group.add(buildMesh(keyPos, 0x3388cc, 0.22, 0.10));
 }
 
 /** Level 8: Margin Call — massive skull, warnings, lightning, order book collapse, hash chaos */
@@ -1499,13 +1503,13 @@ function buildLevel8(group: THREE.Group) {
     color: 0xaa2211, accentColor: 0xff6622, seed: 900, centerY: 20,
     baseRadius: 310, jaggedness: 1.8, depthLayers: 14, depthSpacing: 36,
     stalactiteDensity: 0.60, rockDetailDensity: 0.50, connectStride: 2,
-    samples: 85, coreOpacity: 0.30, glowOpacity: 0.14, depthFade: 0.08,
+    samples: 85, coreOpacity: 0.45, glowOpacity: 0.21, depthFade: 0.06,
   });
 
   // Massive skull centerpiece (even bigger)
   const skullPos: number[] = [];
   buildSkull(skullPos, 0, 30, -120, 140);
-  group.add(buildMesh(skullPos, 0xff4422, 0.32, 0.15));
+  group.add(buildMesh(skullPos, 0xff4422, 0.58, 0.30));
 
   // Smaller skulls scattered
   const skull2Pos: number[] = [];
@@ -1513,37 +1517,37 @@ function buildLevel8(group: THREE.Group) {
   buildSkull(skull2Pos, 300, -20, -280, 50);
   buildSkull(skull2Pos, -120, -90, -340, 35);
   buildSkull(skull2Pos, 150, 100, -360, 30);
-  group.add(buildMesh(skull2Pos, 0xcc3311, 0.18, 0.08));
+  group.add(buildMesh(skull2Pos, 0xcc3311, 0.32, 0.16));
 
   // Warning patterns everywhere — max chaos
   const warnPos: number[] = [];
   buildWarningPatterns(warnPos, 901, 20, 800, 550, -150);
-  group.add(buildMesh(warnPos, 0xff6633, 0.24, 0.11));
+  group.add(buildMesh(warnPos, 0xff6633, 0.43, 0.22));
 
   // Lightning (margin liquidation) — intense
   const boltPos: number[] = [];
   buildLightningBolts(boltPos, 902, 10, 700, 350, -350, -180);
-  group.add(buildMesh(boltPos, 0xff8844, 0.24, 0.11));
+  group.add(buildMesh(boltPos, 0xff8844, 0.43, 0.22));
 
   // Crashed order book
   const obPos: number[] = [];
   buildOrderBook(obPos, 905, -250, -40, -260, 120, 8);
-  group.add(buildMesh(obPos, 0xdd4422, 0.16, 0.07));
+  group.add(buildMesh(obPos, 0xdd4422, 0.29, 0.14));
 
   // Staircase chart (cascading liquidations)
   const stairPos: number[] = [];
   buildStaircaseChart(stairPos, 903, -350, 350, 240, -200, 9);
-  group.add(buildMesh(stairPos, 0xdd4422, 0.18, 0.08));
+  group.add(buildMesh(stairPos, 0xdd4422, 0.32, 0.16));
 
   // Hash stream (transaction chaos)
   const hashPos: number[] = [];
   buildHashStream(hashPos, 906, -350, 350, 80, -300, 3);
-  group.add(buildMesh(hashPos, 0xaa3311, 0.12, 0.05));
+  group.add(buildMesh(hashPos, 0xaa3311, 0.22, 0.10));
 
   // Claw marks
   const clawPos: number[] = [];
   buildClawMarks(clawPos, 904, 8, 600, 450, -280);
-  group.add(buildMesh(clawPos, 0xff3322, 0.14, 0.06));
+  group.add(buildMesh(clawPos, 0xff3322, 0.25, 0.12));
 }
 
 /** Level 9: The Flippening — massive dollar, BTC vs ETH, crossover, everything converges */
@@ -1552,59 +1556,59 @@ function buildLevel9(group: THREE.Group) {
     color: 0x7733cc, accentColor: 0xaa55ff, seed: 1000, centerY: 55,
     baseRadius: 430, jaggedness: 1.0, depthLayers: 10, depthSpacing: 65,
     connectStride: 3, stalactiteDensity: 0.25, rockDetailDensity: 0.20,
-    coreOpacity: 0.26, glowOpacity: 0.11,
+    coreOpacity: 0.40, glowOpacity: 0.18, depthFade: 0.07,
   });
 
   // Giant dollar sign centerpiece (final boss — huge)
   const dollarPos: number[] = [];
   buildGiantDollar(dollarPos, 0, 20, -120, 220);
-  group.add(buildMesh(dollarPos, 0xcc88ff, 0.32, 0.15));
+  group.add(buildMesh(dollarPos, 0xcc88ff, 0.58, 0.30));
 
   // Crossover chart (BTC/ETH lines crossing) — prominent
   const crossPos: number[] = [];
   buildCrossoverChart(crossPos, 1000, -420, 420, 20, -180);
-  group.add(buildMesh(crossPos, 0xaa66ff, 0.26, 0.12));
+  group.add(buildMesh(crossPos, 0xaa66ff, 0.47, 0.24));
 
   // Giant ETH diamond on right
   const ethPos: number[] = [];
   buildGiantEth(ethPos, 240, 40, -240, 120);
-  group.add(buildMesh(ethPos, 0x66bbff, 0.22, 0.10));
+  group.add(buildMesh(ethPos, 0x66bbff, 0.40, 0.20));
 
   // Giant BTC symbol on left
   const btcPos: number[] = [];
   buildGiantBitcoin(btcPos, -240, 40, -240, 110);
-  group.add(buildMesh(btcPos, 0xffaa44, 0.22, 0.10));
+  group.add(buildMesh(btcPos, 0xffaa44, 0.40, 0.20));
 
   // Blockchain blocks (bigger, more)
   const blockPos: number[] = [];
   buildBlockchainBlocks(blockPos, 1001, 14, 700, 500, -80, -350, 30);
-  group.add(buildMesh(blockPos, 0x8855cc, 0.18, 0.08));
+  group.add(buildMesh(blockPos, 0x8855cc, 0.32, 0.16));
 
   // Liquidity pools (DeFi finale)
   const poolPos: number[] = [];
   buildLiquidityPool(poolPos, -150, -60, -280, 70, 5);
   buildLiquidityPool(poolPos, 180, -80, -310, 60, 4);
-  group.add(buildMesh(poolPos, 0xaa77ee, 0.16, 0.07));
+  group.add(buildMesh(poolPos, 0xaa77ee, 0.29, 0.14));
 
   // Hash streams (all chains computing)
   const hashPos: number[] = [];
   buildHashStream(hashPos, 1004, -380, 380, -80, -300, 4);
-  group.add(buildMesh(hashPos, 0x7744cc, 0.14, 0.06));
+  group.add(buildMesh(hashPos, 0x7744cc, 0.25, 0.12));
 
   // Volume bars (final volume explosion)
   const volPos: number[] = [];
   buildVolumeBars(volPos, 1005, -400, 400, -220, -200, 25, 100);
-  group.add(buildMesh(volPos, 0x9955dd, 0.14, 0.06));
+  group.add(buildMesh(volPos, 0x9955dd, 0.25, 0.12));
 
   // Crystal formations (new era crystallizing)
   const crystPos: number[] = [];
   buildCrystals(crystPos, 1003, 12, 800, 550, -100, -320, [25, 60]);
-  group.add(buildMesh(crystPos, 0xbb88ff, 0.14, 0.06));
+  group.add(buildMesh(crystPos, 0xbb88ff, 0.25, 0.12));
 
   // Concentric rings (power emanating)
   const ringPos: number[] = [];
   buildConcentricRings(ringPos, 0, 20, -350, 8, 200, 10);
-  group.add(buildMesh(ringPos, 0x7744bb, 0.10, 0.04));
+  group.add(buildMesh(ringPos, 0x7744bb, 0.18, 0.08));
 }
 
 function makeNebulaTexture(seed: number, palette: AtmospherePalette): THREE.Texture {
@@ -1700,7 +1704,7 @@ function addNebulaPlanes(group: THREE.Group, palette: AtmospherePalette, rng: ()
         map: nebulaTexture,
         color: i === 2 ? palette.nebulaC : i === 1 ? palette.nebulaB : palette.nebulaA,
         transparent: true,
-        opacity: 0.12 + (2 - i) * 0.05,
+        opacity: 0.18 + (2 - i) * 0.07,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
         toneMapped: false,
@@ -1815,7 +1819,7 @@ function addEnergyStreaks(group: THREE.Group, palette: AtmospherePalette, rng: (
     const angle = -0.5 + rng() * 1.0;
     line(streakPos, x, y, z, x + Math.cos(angle) * len, y + Math.sin(angle) * len, z - rng() * 80);
   }
-  const streaks = buildMesh(streakPos, palette.accent, 0.07, 0.035);
+  const streaks = buildMesh(streakPos, palette.accent, 0.14, 0.07);
   streaks.renderOrder = -5;
   group.add(streaks);
   state.movers.push({
