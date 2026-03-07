@@ -95,11 +95,12 @@ export class Renderer {
   private tickerEl: HTMLElement;
   private particles: Particle[] = [];
 
-  // 2D canvas HUD rendered as texture in the scene (goes through CRT)
+  // 2D canvas HUD rendered via separate scene (goes through CRT)
   private hudCanvas: HTMLCanvasElement;
   private hudCtx: CanvasRenderingContext2D;
   private hudTexture: THREE.CanvasTexture;
-  private hudMesh: THREE.Mesh;
+  private hudScene: THREE.Scene;
+  private hudCamera: THREE.OrthographicCamera;
   private hudData: {
     score: number; lives: number; combo: number;
     sentiment: string; sentimentColor: string;
@@ -134,9 +135,40 @@ export class Renderer {
     this.webgl.toneMappingExposure = initialTheme.exposure;
     container.appendChild(this.webgl.domElement);
 
+    // 2D canvas HUD (rendered in separate scene, goes through bloom + CRT)
+    this.hudCanvas = document.createElement('canvas');
+    this.hudCanvas.width = 2048;
+    this.hudCanvas.height = 1536;
+    this.hudCtx = this.hudCanvas.getContext('2d')!;
+    this.hudTexture = new THREE.CanvasTexture(this.hudCanvas);
+    this.hudTexture.minFilter = THREE.LinearFilter;
+    this.hudTexture.magFilter = THREE.LinearFilter;
+
+    // HUD scene with orthographic camera (overlays on main scene)
+    this.hudScene = new THREE.Scene();
+    this.hudCamera = new THREE.OrthographicCamera(-HW, HW, HH, -HH, 0.1, 10);
+    this.hudCamera.position.z = 1;
+    const hudMat = new THREE.MeshBasicMaterial({
+      map: this.hudTexture,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false,
+    });
+    const hudMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(GAME_WIDTH, GAME_HEIGHT),
+      hudMat,
+    );
+    this.hudScene.add(hudMesh);
+
     // Post-processing
     this.composer = new EffectComposer(this.webgl);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
+    // Render HUD scene on top (clear=false keeps the main scene)
+    const hudRenderPass = new RenderPass(this.hudScene, this.hudCamera);
+    hudRenderPass.clear = false;
+    this.composer.addPass(hudRenderPass);
+
     this.bloom = new UnrealBloomPass(
       new THREE.Vector2(GAME_WIDTH, GAME_HEIGHT),
       initialTheme.bloomStrength,  // strength
@@ -163,33 +195,6 @@ export class Renderer {
     this.hudEl.style.display = 'none';
     this.calloutsEl.style.display = 'none';
     document.getElementById('ticker')!.style.display = 'none';
-
-    // 2D canvas HUD (rendered as texture in the 3D scene → goes through CRT)
-    this.hudCanvas = document.createElement('canvas');
-    this.hudCanvas.width = 1024;
-    this.hudCanvas.height = 768;
-    this.hudCtx = this.hudCanvas.getContext('2d')!;
-    this.hudTexture = new THREE.CanvasTexture(this.hudCanvas);
-    this.hudTexture.minFilter = THREE.LinearFilter;
-    this.hudTexture.magFilter = THREE.LinearFilter;
-
-    // Full-screen quad at camera near plane
-    const hudGeo = new THREE.PlaneGeometry(GAME_WIDTH, GAME_HEIGHT);
-    const hudMat = new THREE.MeshBasicMaterial({
-      map: this.hudTexture,
-      transparent: true,
-      depthTest: false,
-      depthWrite: false,
-      toneMapped: false,
-      fog: false,
-    });
-    this.hudMesh = new THREE.Mesh(hudGeo, hudMat);
-    this.hudMesh.renderOrder = 100;
-    this.hudMesh.frustumCulled = false;
-    // Position it right in front of camera
-    const camZ2 = HH / Math.tan((fov / 2) * Math.PI / 180);
-    this.hudMesh.position.set(0, 0, camZ2 - 2);
-    this.scene.add(this.hudMesh);
 
     this.initTicker();
 
@@ -1041,7 +1046,7 @@ export class Renderer {
   }
 
   showCallout(gx: number, gy: number, text: string, color: string, size: number = 18) {
-    this.activeCallouts.push({ text, color, size: size * 1.8, gx, gy, startTime: performance.now() });
+    this.activeCallouts.push({ text, color, size: size * 2.5, gx, gy, startTime: performance.now() });
   }
 
   updateHUD(data: {
@@ -1056,6 +1061,9 @@ export class Renderer {
     this.overlayHtml = html;
     this.overlayEl.innerHTML = html;
     this.overlayEl.style.display = 'flex';
+    // Ensure overlay is properly positioned
+    this.overlayEl.style.position = 'absolute';
+    this.overlayEl.style.zIndex = '20';
   }
 
   hideOverlay() {
@@ -1075,15 +1083,15 @@ export class Renderer {
 
     // ── Ticker tape (top) ──
     if (this.tickerData.length > 0) {
-      const tickerH = 32 * sy;
-      ctx.fillStyle = 'rgba(0, 2, 8, 0.5)';
+      const tickerH = 56 * sy;
+      ctx.fillStyle = 'rgba(0, 2, 8, 0.6)';
       ctx.fillRect(0, 0, W, tickerH);
 
       ctx.save();
       ctx.rect(0, 0, W, tickerH);
       ctx.clip();
 
-      const fontSize = Math.round(18 * sy);
+      const fontSize = Math.round(32 * sy);
       ctx.font = `bold ${fontSize}px "Courier New", monospace`;
       ctx.textBaseline = 'middle';
 
@@ -1091,10 +1099,11 @@ export class Renderer {
       let totalWidth = 0;
       const segments: { text: string; color: string; width: number }[] = [];
       for (const c of this.tickerData) {
+        if (c.price == null || c.pct == null) continue;
         const sign = c.pct >= 0 ? '+' : '';
         const priceStr = c.price >= 1 ? c.price.toFixed(2) : c.price.toFixed(4);
         const label = `${c.sym} $${priceStr} ${sign}${c.pct.toFixed(1)}%`;
-        const color = c.pct >= 0 ? '#00cc66' : '#cc3333';
+        const color = c.pct >= 0 ? '#009944' : '#993333';
         const w = ctx.measureText(label).width;
         segments.push({ text: label, color, width: w });
         const sepW = ctx.measureText('  |  ').width;
@@ -1103,7 +1112,7 @@ export class Renderer {
       }
 
       // Scroll
-      this.tickerOffset = (this.tickerOffset + 0.8) % totalWidth;
+      this.tickerOffset = (this.tickerOffset + 2.5) % totalWidth;
 
       let x = -this.tickerOffset;
       const cy = tickerH / 2;
@@ -1112,10 +1121,7 @@ export class Renderer {
         for (const seg of segments) {
           if (x + seg.width > 0 && x < W) {
             ctx.fillStyle = seg.color;
-            ctx.shadowColor = seg.color;
-            ctx.shadowBlur = 6;
             ctx.fillText(seg.text, x, cy);
-            ctx.shadowBlur = 0;
           }
           x += seg.width;
         }
@@ -1128,23 +1134,26 @@ export class Renderer {
       const d = this.hudData;
       const bagValue = '$' + (d.score * 100 + 10000).toLocaleString();
       const pnl = d.score > 0 ? `+${(d.score * 0.8).toFixed(0)}%` : '0%';
-      const pnlColor = d.score > 0 ? '#00ff88' : '#888888';
+      const pnlColor = d.score > 0 ? '#009966' : '#666666';
       const hodl = '\u25C6'.repeat(d.lives);
       const comboText = d.combo >= 5 ? `x${d.combo} MEGA PUMP`
         : d.combo >= 3 ? `x${d.combo} PUMP`
         : d.combo > 1 ? `x${d.combo}` : '';
 
+      // HUD background bar
+      const hudBarH = 52 * sy;
+      ctx.fillStyle = 'rgba(0, 2, 8, 0.5)';
+      ctx.fillRect(0, H - hudBarH, W, hudBarH);
+
       const hudY = H - 14 * sy;
-      const bigFont = Math.round(22 * sy);
-      const medFont = Math.round(18 * sy);
-      const smallFont = Math.round(15 * sy);
+      const bigFont = Math.round(36 * sy);
+      const medFont = Math.round(28 * sy);
+      const smallFont = Math.round(22 * sy);
       let hx = 14 * sx;
 
       // Bag value
       ctx.font = `bold ${bigFont}px "Courier New", monospace`;
-      ctx.fillStyle = '#00ff88';
-      ctx.shadowColor = '#00ff88';
-      ctx.shadowBlur = 10;
+      ctx.fillStyle = '#009966';
       ctx.textBaseline = 'bottom';
       ctx.fillText(bagValue, hx, hudY);
       hx += ctx.measureText(bagValue).width + 12 * sx;
@@ -1152,22 +1161,19 @@ export class Renderer {
       // PnL
       ctx.font = `bold ${medFont}px "Courier New", monospace`;
       ctx.fillStyle = pnlColor;
-      ctx.shadowColor = pnlColor;
       ctx.fillText(pnl, hx, hudY);
       hx += ctx.measureText(pnl).width + 14 * sx;
 
       // Lives
       ctx.font = `${medFont}px "Courier New", monospace`;
-      ctx.fillStyle = '#44ddff';
-      ctx.shadowColor = '#44ddff';
+      ctx.fillStyle = '#3399bb';
       ctx.fillText(hodl, hx, hudY);
       hx += ctx.measureText(hodl).width + 14 * sx;
 
       // Combo
       if (comboText) {
         ctx.font = `bold ${medFont}px "Courier New", monospace`;
-        ctx.fillStyle = '#ffaa00';
-        ctx.shadowColor = '#ffaa00';
+        ctx.fillStyle = '#bb8800';
         ctx.fillText(comboText, hx, hudY);
         hx += ctx.measureText(comboText).width + 14 * sx;
       }
@@ -1175,26 +1181,21 @@ export class Renderer {
       // Sentiment
       ctx.font = `bold ${smallFont}px "Courier New", monospace`;
       ctx.fillStyle = d.sentimentColor;
-      ctx.shadowColor = d.sentimentColor;
       ctx.fillText(d.sentiment, hx, hudY);
       hx += ctx.measureText(d.sentiment).width + 14 * sx;
 
       // Effects
       if (d.effects) {
         ctx.font = `${smallFont}px "Courier New", monospace`;
-        ctx.fillStyle = '#44ddff';
-        ctx.shadowColor = '#44ddff';
+        ctx.fillStyle = '#3399bb';
         ctx.fillText(d.effects, hx, hudY);
       }
 
       // Stage name (right side)
       ctx.font = `${smallFont}px "Courier New", monospace`;
-      ctx.fillStyle = '#556677';
-      ctx.shadowColor = '#556677';
-      ctx.shadowBlur = 4;
+      ctx.fillStyle = '#445566';
       const stageW = ctx.measureText(d.stage).width;
       ctx.fillText(d.stage, W - stageW - 14 * sx, hudY);
-      ctx.shadowBlur = 0;
     }
 
     // ── Callouts ──
@@ -1214,12 +1215,9 @@ export class Renderer {
       ctx.globalAlpha = alpha;
       ctx.font = `bold ${c.size * sy}px "Courier New", monospace`;
       ctx.fillStyle = c.color;
-      ctx.shadowColor = c.color;
-      ctx.shadowBlur = 20;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(c.text, 0, 0);
-      ctx.shadowBlur = 0;
       ctx.globalAlpha = 1;
       ctx.restore();
     }
@@ -1257,6 +1255,7 @@ export class Renderer {
     canvas.style.position = 'absolute';
     canvas.style.left = `${(w - cw) / 2}px`;
     canvas.style.top = `${(h - ch) / 2}px`;
+    canvas.style.zIndex = '1';
 
     // Overlay (still HTML for menu/pause/gameover — sits on top of CRT canvas)
     this.overlayEl.style.width = `${cw}px`;

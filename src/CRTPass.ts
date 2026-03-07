@@ -31,8 +31,8 @@ const CRT_SHADER = {
     uniform float strength;
     varying vec2 vUv;
 
-    const float V_RES_Y = 240.0;
-    const float HARD_SCAN = -13.0;
+    const float V_RES_Y = 360.0;
+    const float HARD_SCAN = -11.0;
     const float MASK_STR = 0.14;
 
     void main() {
