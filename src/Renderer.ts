@@ -95,6 +95,21 @@ export class Renderer {
   private tickerEl: HTMLElement;
   private particles: Particle[] = [];
 
+  // 2D canvas HUD rendered as texture in the scene (goes through CRT)
+  private hudCanvas: HTMLCanvasElement;
+  private hudCtx: CanvasRenderingContext2D;
+  private hudTexture: THREE.CanvasTexture;
+  private hudMesh: THREE.Mesh;
+  private hudData: {
+    score: number; lives: number; combo: number;
+    sentiment: string; sentimentColor: string;
+    stage: string; effects: string;
+  } | null = null;
+  private tickerData: { sym: string; price: number; pct: number }[] = [];
+  private tickerOffset = 0;
+  private activeCallouts: { text: string; color: string; size: number; gx: number; gy: number; startTime: number }[] = [];
+  private overlayHtml: string | null = null;
+
   constructor(container: HTMLElement) {
     this.container = container;
 
@@ -140,11 +155,42 @@ export class Renderer {
     this.fxGroup = new THREE.Group();
     this.scene.add(this.fxGroup);
 
-    // HUD & overlay
+    // HTML elements (hidden — we render to canvas instead)
     this.hudEl = document.getElementById('hud')!;
     this.overlayEl = document.getElementById('overlay')!;
     this.calloutsEl = document.getElementById('callouts')!;
     this.tickerEl = document.getElementById('ticker-content')!;
+    this.hudEl.style.display = 'none';
+    this.calloutsEl.style.display = 'none';
+    document.getElementById('ticker')!.style.display = 'none';
+
+    // 2D canvas HUD (rendered as texture in the 3D scene → goes through CRT)
+    this.hudCanvas = document.createElement('canvas');
+    this.hudCanvas.width = 1024;
+    this.hudCanvas.height = 768;
+    this.hudCtx = this.hudCanvas.getContext('2d')!;
+    this.hudTexture = new THREE.CanvasTexture(this.hudCanvas);
+    this.hudTexture.minFilter = THREE.LinearFilter;
+    this.hudTexture.magFilter = THREE.LinearFilter;
+
+    // Full-screen quad at camera near plane
+    const hudGeo = new THREE.PlaneGeometry(GAME_WIDTH, GAME_HEIGHT);
+    const hudMat = new THREE.MeshBasicMaterial({
+      map: this.hudTexture,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false,
+      fog: false,
+    });
+    this.hudMesh = new THREE.Mesh(hudGeo, hudMat);
+    this.hudMesh.renderOrder = 100;
+    this.hudMesh.frustumCulled = false;
+    // Position it right in front of camera
+    const camZ2 = HH / Math.tan((fov / 2) * Math.PI / 180);
+    this.hudMesh.position.set(0, 0, camZ2 - 2);
+    this.scene.add(this.hudMesh);
+
     this.initTicker();
 
     // Resize
@@ -943,11 +989,10 @@ export class Renderer {
     material.dispose();
   }
 
-  // ── HUD ──
-  // ── Crypto ticker tape ──
+  // ── HUD (canvas-based — rendered through CRT) ──
+
   private initTicker() {
-    // Show fake data immediately, then replace with real data
-    this.renderTickerData(this.fakeTicker());
+    this.tickerData = this.fakeTicker();
     this.fetchRealTicker();
   }
 
@@ -966,20 +1011,6 @@ export class Renderer {
       const pct = (Math.random() - 0.45) * 20;
       return { sym: c.sym, price: c.base * (1 + pct / 100), pct };
     });
-  }
-
-  private renderTickerData(data: { sym: string; price: number; pct: number }[]) {
-    let html = '';
-    for (let rep = 0; rep < 2; rep++) {
-      for (const c of data) {
-        const cls = c.pct >= 0 ? 'up' : 'down';
-        const sign = c.pct >= 0 ? '+' : '';
-        const priceStr = c.price >= 1 ? c.price.toFixed(2) : c.price.toFixed(4);
-        html += `<span class="${cls}">${c.sym} $${priceStr} ${sign}${c.pct.toFixed(1)}%</span>`;
-        html += `<span class="sep">|</span>`;
-      }
-    }
-    this.tickerEl.innerHTML = html;
   }
 
   private async fetchRealTicker() {
@@ -1003,27 +1034,14 @@ export class Renderer {
           data.push({ sym, price: entry.usd, pct: entry.usd_24h_change ?? 0 });
         }
       }
-      if (data.length > 0) this.renderTickerData(data);
+      if (data.length > 0) this.tickerData = data;
     } catch {
       // Keep fake data if fetch fails
     }
   }
 
-  // ── Callout popups ──
   showCallout(gx: number, gy: number, text: string, color: string, size: number = 18) {
-    const el = document.createElement('div');
-    el.className = 'callout';
-    el.textContent = text;
-    el.style.color = color;
-    el.style.fontSize = size + 'px';
-    // Convert game coords to screen percentage
-    const pctX = (gx / GAME_WIDTH) * 100;
-    const pctY = (gy / GAME_HEIGHT) * 100;
-    el.style.left = pctX + '%';
-    el.style.top = pctY + '%';
-    el.style.transform = 'translate(-50%, -50%)';
-    this.calloutsEl.appendChild(el);
-    setTimeout(() => el.remove(), 1200);
+    this.activeCallouts.push({ text, color, size: size * 1.8, gx, gy, startTime: performance.now() });
   }
 
   updateHUD(data: {
@@ -1031,38 +1049,187 @@ export class Renderer {
     sentiment: string; sentimentColor: string;
     stage: string; effects: string;
   }) {
-    const bagValue = (data.score * 100 + 10000).toLocaleString();
-    const pnl = data.score > 0 ? `+${(data.score * 0.8).toFixed(0)}%` : '0%';
-    const pnlColor = data.score > 0 ? '#00ff88' : '#888';
-    const hodlIcons = '&#9670;'.repeat(data.lives);
-    const comboText = data.combo >= 5 ? `x${data.combo} MEGA PUMP`
-      : data.combo >= 3 ? `x${data.combo} PUMP`
-      : data.combo > 1 ? `x${data.combo}` : '';
-
-    this.hudEl.innerHTML = `
-      <div>
-        <span style="color:#00ff88;font-size:15px">$${bagValue}</span>
-        <span style="color:${pnlColor};font-size:11px">${pnl}</span>
-        <span style="color:#44ddff">${hodlIcons}</span>
-        ${comboText ? `<span style="color:#ffaa00">${comboText}</span>` : ''}
-        <span style="color:${data.sentimentColor};font-size:11px">${data.sentiment}</span>
-        ${data.effects ? `<span style="color:#44ddff;font-size:10px">${data.effects}</span>` : ''}
-      </div>
-      <div><span style="color:#334455;font-size:10px">${data.stage}</span></div>
-    `;
+    this.hudData = data;
   }
 
   showOverlay(html: string) {
+    this.overlayHtml = html;
     this.overlayEl.innerHTML = html;
     this.overlayEl.style.display = 'flex';
   }
 
   hideOverlay() {
+    this.overlayHtml = null;
     this.overlayEl.style.display = 'none';
+  }
+
+  /** Render all HUD/ticker/callouts to the canvas texture */
+  private renderHudCanvas() {
+    const W = this.hudCanvas.width;
+    const H = this.hudCanvas.height;
+    const ctx = this.hudCtx;
+    const sx = W / GAME_WIDTH;
+    const sy = H / GAME_HEIGHT;
+
+    ctx.clearRect(0, 0, W, H);
+
+    // ── Ticker tape (top) ──
+    if (this.tickerData.length > 0) {
+      const tickerH = 32 * sy;
+      ctx.fillStyle = 'rgba(0, 2, 8, 0.5)';
+      ctx.fillRect(0, 0, W, tickerH);
+
+      ctx.save();
+      ctx.rect(0, 0, W, tickerH);
+      ctx.clip();
+
+      const fontSize = Math.round(18 * sy);
+      ctx.font = `bold ${fontSize}px "Courier New", monospace`;
+      ctx.textBaseline = 'middle';
+
+      // Build ticker string and measure
+      let totalWidth = 0;
+      const segments: { text: string; color: string; width: number }[] = [];
+      for (const c of this.tickerData) {
+        const sign = c.pct >= 0 ? '+' : '';
+        const priceStr = c.price >= 1 ? c.price.toFixed(2) : c.price.toFixed(4);
+        const label = `${c.sym} $${priceStr} ${sign}${c.pct.toFixed(1)}%`;
+        const color = c.pct >= 0 ? '#00cc66' : '#cc3333';
+        const w = ctx.measureText(label).width;
+        segments.push({ text: label, color, width: w });
+        const sepW = ctx.measureText('  |  ').width;
+        segments.push({ text: '  |  ', color: '#334455', width: sepW });
+        totalWidth += w + sepW;
+      }
+
+      // Scroll
+      this.tickerOffset = (this.tickerOffset + 0.8) % totalWidth;
+
+      let x = -this.tickerOffset;
+      const cy = tickerH / 2;
+      // Draw twice for seamless loop
+      for (let rep = 0; rep < 3 && x < W; rep++) {
+        for (const seg of segments) {
+          if (x + seg.width > 0 && x < W) {
+            ctx.fillStyle = seg.color;
+            ctx.shadowColor = seg.color;
+            ctx.shadowBlur = 6;
+            ctx.fillText(seg.text, x, cy);
+            ctx.shadowBlur = 0;
+          }
+          x += seg.width;
+        }
+      }
+      ctx.restore();
+    }
+
+    // ── HUD (bottom) ──
+    if (this.hudData) {
+      const d = this.hudData;
+      const bagValue = '$' + (d.score * 100 + 10000).toLocaleString();
+      const pnl = d.score > 0 ? `+${(d.score * 0.8).toFixed(0)}%` : '0%';
+      const pnlColor = d.score > 0 ? '#00ff88' : '#888888';
+      const hodl = '\u25C6'.repeat(d.lives);
+      const comboText = d.combo >= 5 ? `x${d.combo} MEGA PUMP`
+        : d.combo >= 3 ? `x${d.combo} PUMP`
+        : d.combo > 1 ? `x${d.combo}` : '';
+
+      const hudY = H - 14 * sy;
+      const bigFont = Math.round(22 * sy);
+      const medFont = Math.round(18 * sy);
+      const smallFont = Math.round(15 * sy);
+      let hx = 14 * sx;
+
+      // Bag value
+      ctx.font = `bold ${bigFont}px "Courier New", monospace`;
+      ctx.fillStyle = '#00ff88';
+      ctx.shadowColor = '#00ff88';
+      ctx.shadowBlur = 10;
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(bagValue, hx, hudY);
+      hx += ctx.measureText(bagValue).width + 12 * sx;
+
+      // PnL
+      ctx.font = `bold ${medFont}px "Courier New", monospace`;
+      ctx.fillStyle = pnlColor;
+      ctx.shadowColor = pnlColor;
+      ctx.fillText(pnl, hx, hudY);
+      hx += ctx.measureText(pnl).width + 14 * sx;
+
+      // Lives
+      ctx.font = `${medFont}px "Courier New", monospace`;
+      ctx.fillStyle = '#44ddff';
+      ctx.shadowColor = '#44ddff';
+      ctx.fillText(hodl, hx, hudY);
+      hx += ctx.measureText(hodl).width + 14 * sx;
+
+      // Combo
+      if (comboText) {
+        ctx.font = `bold ${medFont}px "Courier New", monospace`;
+        ctx.fillStyle = '#ffaa00';
+        ctx.shadowColor = '#ffaa00';
+        ctx.fillText(comboText, hx, hudY);
+        hx += ctx.measureText(comboText).width + 14 * sx;
+      }
+
+      // Sentiment
+      ctx.font = `bold ${smallFont}px "Courier New", monospace`;
+      ctx.fillStyle = d.sentimentColor;
+      ctx.shadowColor = d.sentimentColor;
+      ctx.fillText(d.sentiment, hx, hudY);
+      hx += ctx.measureText(d.sentiment).width + 14 * sx;
+
+      // Effects
+      if (d.effects) {
+        ctx.font = `${smallFont}px "Courier New", monospace`;
+        ctx.fillStyle = '#44ddff';
+        ctx.shadowColor = '#44ddff';
+        ctx.fillText(d.effects, hx, hudY);
+      }
+
+      // Stage name (right side)
+      ctx.font = `${smallFont}px "Courier New", monospace`;
+      ctx.fillStyle = '#556677';
+      ctx.shadowColor = '#556677';
+      ctx.shadowBlur = 4;
+      const stageW = ctx.measureText(d.stage).width;
+      ctx.fillText(d.stage, W - stageW - 14 * sx, hudY);
+      ctx.shadowBlur = 0;
+    }
+
+    // ── Callouts ──
+    const now = performance.now();
+    this.activeCallouts = this.activeCallouts.filter(c => now - c.startTime < 1200);
+    for (const c of this.activeCallouts) {
+      const t = (now - c.startTime) / 1200; // 0→1
+      const alpha = t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4;
+      const yOff = t * -80 * sy;
+      const scale = t < 0.6 ? 1 + t * 0.25 : 1.15 - (t - 0.6) * 0.875;
+
+      ctx.save();
+      const cx = c.gx * sx;
+      const cy = c.gy * sy + yOff;
+      ctx.translate(cx, cy);
+      ctx.scale(scale, scale);
+      ctx.globalAlpha = alpha;
+      ctx.font = `bold ${c.size * sy}px "Courier New", monospace`;
+      ctx.fillStyle = c.color;
+      ctx.shadowColor = c.color;
+      ctx.shadowBlur = 20;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(c.text, 0, 0);
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+
+    this.hudTexture.needsUpdate = true;
   }
 
   // ── Render ──
   render() {
+    this.renderHudCanvas();
     this.crt.uniforms.time.value = performance.now() * 0.001;
     this.composer.render();
   }
@@ -1091,26 +1258,11 @@ export class Renderer {
     canvas.style.left = `${(w - cw) / 2}px`;
     canvas.style.top = `${(h - ch) / 2}px`;
 
-    // Scale HUD/overlay to match
-    this.hudEl.style.width = `${cw}px`;
-    this.hudEl.style.left = `${(w - cw) / 2}px`;
-    this.hudEl.style.bottom = `${(h - ch) / 2 + 5}px`;
-    this.hudEl.style.fontSize = `${Math.max(11, scale * 13)}px`;
-
+    // Overlay (still HTML for menu/pause/gameover — sits on top of CRT canvas)
     this.overlayEl.style.width = `${cw}px`;
     this.overlayEl.style.height = `${ch}px`;
     this.overlayEl.style.left = `${(w - cw) / 2}px`;
     this.overlayEl.style.top = `${(h - ch) / 2}px`;
-
-    this.calloutsEl.style.width = `${cw}px`;
-    this.calloutsEl.style.height = `${ch}px`;
-    this.calloutsEl.style.left = `${(w - cw) / 2}px`;
-    this.calloutsEl.style.top = `${(h - ch) / 2}px`;
-
-    const tickerContainer = this.tickerEl.parentElement!;
-    tickerContainer.style.width = `${cw}px`;
-    tickerContainer.style.left = `${(w - cw) / 2}px`;
-    tickerContainer.style.top = `${(h - ch) / 2}px`;
   }
 
   /** Convert screen mouse coords to game coords */
