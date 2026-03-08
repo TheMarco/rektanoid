@@ -134,7 +134,7 @@ export const BOSS_DEFINITIONS: BossDefinition[] = [
       {
         id: 'overdrive',
         hpThreshold: 0.25,
-        label: 'OVERDRIVE',
+        label: 'CASCADING',
         allowedAttackIds: ['liquidationBeam', 'columnStrike', 'volatilityPulse', 'hazardSummon'],
         modifiers: {
           aggressionMultiplier: 1.8,

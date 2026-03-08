@@ -1345,13 +1345,13 @@ export class Game {
       } else if (this.comboCount === 8) {
         this.r.showCallout(brick.x, brick.y - 20, 'WHALE ALERT!', '#44ddff', 20, true);
       } else if (this.comboCount === 10) {
-        this.r.showCallout(brick.x, brick.y - 20, 'CONVICTION HOLD!', '#88eeff', 20, true);
+        this.r.showCallout(brick.x, brick.y - 20, 'HODL!', '#88eeff', 20, true);
       } else if (this.comboCount === 12) {
         this.r.showCallout(brick.x, brick.y - 20, 'DIAMOND HANDS!', '#88eeff', 22, true);
       } else if (this.comboCount === 15) {
         this.r.showCallout(brick.x, brick.y - 20, 'NEW PARADIGM!', '#ffaa00', 24, true);
       } else if (this.comboCount >= 20 && this.comboCount % 5 === 0) {
-        this.r.showCallout(brick.x, brick.y - 20, 'UNSTOPPABLE!', '#ff44ff', 26, true);
+        this.r.showCallout(brick.x, brick.y - 20, 'PARABOLIC!', '#ff44ff', 26, true);
       }
 
       // Sentiment
@@ -1421,7 +1421,7 @@ export class Game {
 
       // Influencer — converts adjacent same-type bricks to standard
       if (brick.def.influencer) {
-        this.r.showCallout(brick.x, brick.y - 15, 'CANCELLED!', '#ff44cc', 16, true);
+        this.r.showCallout(brick.x, brick.y - 15, 'FADED!', '#ff44cc', 16, true);
         this.r.burst(brick.x, brick.y, 0xff44cc, 15);
         const stdDef = BRICK_TYPES['standard'];
         for (const other of this.bricks) {

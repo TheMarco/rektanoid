@@ -1923,7 +1923,7 @@ export class Renderer {
       const pnl = d.score > 0 ? `+${(d.score * 0.8).toFixed(0)}%` : '0%';
       const pnlColor = d.score > 0 ? '#009966' : '#666666';
       const hodl = '\u25C6'.repeat(d.lives);
-      const comboText = d.combo >= 5 ? `x${d.combo} MEGA`
+      const comboText = d.combo >= 5 ? `x${d.combo} SEND IT`
         : d.combo >= 3 ? `x${d.combo} PUMP`
         : d.combo > 1 ? `x${d.combo}` : '';
 
