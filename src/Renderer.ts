@@ -70,13 +70,13 @@ const LEVEL_THEMES: {
 }[] = [
   { bg: 0x010a06, fog: 0x021a0c, accent: 0x00ff88, fogDensity: 0.0013, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.15 }, // Genesis Block
   { bg: 0x010a06, fog: 0x021a0c, accent: 0x00ff88, fogDensity: 0.0012, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.15 }, // Bull Trap
-  { bg: 0x0a0204, fog: 0x1a0508, accent: 0xff2222, fogDensity: 0.0015, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.10 }, // Liquidation
+  { bg: 0x180709, fog: 0x3a1115, accent: 0xff4b44, fogDensity: 0.0010, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.22 }, // Liquidation
   { bg: 0x0a0800, fog: 0x1a1000, accent: 0xffaa00, fogDensity: 0.0013, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.15 }, // Pump & Dump
   { bg: 0x020810, fog: 0x041420, accent: 0x44ddff, fogDensity: 0.0014, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.15 }, // Diamond Hands
-  { bg: 0x0a0204, fog: 0x1a0508, accent: 0xff2222, fogDensity: 0.0015, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.10 }, // Bear Market
+  { bg: 0x180709, fog: 0x381117, accent: 0xff5160, fogDensity: 0.0010, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.22 }, // Bear Market
   { bg: 0x060804, fog: 0x0c1008, accent: 0xffaa00, fogDensity: 0.0013, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.15 }, // Halving
   { bg: 0x020810, fog: 0x041420, accent: 0x44ddff, fogDensity: 0.0014, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.12 }, // DeFi Maze
-  { bg: 0x0a0204, fog: 0x1a0508, accent: 0xff2222, fogDensity: 0.0016, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.10 }, // Margin Call
+  { bg: 0x190809, fog: 0x3d1512, accent: 0xff5c47, fogDensity: 0.0010, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.24 }, // Margin Call
   { bg: 0x060210, fog: 0x0c0420, accent: 0x8844ff, fogDensity: 0.0014, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.15 }, // Flippening
 ];
 
@@ -1022,119 +1022,603 @@ export class Renderer {
 
   // ── Boss mesh ──
 
+  // Geometry helpers for boss wireframes
+  private bossCircle(cx: number, cy: number, z: number, r: number, segs: number): number[] {
+    const p: number[] = [];
+    for (let i = 0; i < segs; i++) {
+      const a1 = (i / segs) * Math.PI * 2, a2 = ((i + 1) / segs) * Math.PI * 2;
+      p.push(cx + Math.cos(a1) * r, cy + Math.sin(a1) * r, z,
+             cx + Math.cos(a2) * r, cy + Math.sin(a2) * r, z);
+    }
+    return p;
+  }
+
+  private bossCurve(pts: [number, number][], z: number): number[] {
+    const p: number[] = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      p.push(pts[i][0], pts[i][1], z, pts[i + 1][0], pts[i + 1][1], z);
+    }
+    return p;
+  }
+
+  private bossLineGroup(positions: number[], color: number | THREE.Color, opacity: number,
+    thickness: number, additive: boolean, name?: string): THREE.LineSegments {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    const thickened = thickenGeo(geo, thickness, 2);
+    const mesh = new THREE.LineSegments(thickened,
+      new THREE.LineBasicMaterial({
+        color, transparent: true, opacity,
+        blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
+        depthTest: !additive, depthWrite: false,
+        fog: false, toneMapped: false,
+      }));
+    if (name) mesh.name = name;
+    mesh.renderOrder = additive ? 5 : 6;
+    return mesh;
+  }
+
   makeBossMesh(def: BossDefinition): THREE.Group {
+    if (def.id === 'whale') return this.makeWhaleMesh(def);
+    if (def.id === 'liquidator') return this.makeLiquidatorMesh(def);
+    if (def.id === 'flippening') return this.makeFlippeningMesh(def);
+    // Fallback
+    const g = new THREE.Group();
+    g.add(this.bossLineGroup([0, 0, 0, 10, 10, 0], def.color, 0.6, 0.08, false));
+    return g;
+  }
+
+  private makeWhaleMesh(def: BossDefinition): THREE.Group {
     const group = new THREE.Group();
     const hw = def.width / 2, hh = def.height / 2;
     const d = 4;
+    const body: number[] = [];
+    const detail: number[] = [];
+    const hotglowPos: number[] = [];
 
-    const positions: number[] = [];
+    // ── Dorsal contour (top of whale, flowing left=nose to right=tail)
+    const dorsalPts: [number, number][] = [
+      [-hw * 0.82, hh * 0.05],    // nose tip
+      [-hw * 0.75, -hh * 0.15],   // forehead
+      [-hw * 0.55, -hh * 0.35],   // rising head
+      [-hw * 0.3, -hh * 0.5],     // crown
+      [-hw * 0.05, -hh * 0.45],   // behind head dip
+      [hw * 0.15, -hh * 0.55],    // dorsal fin start
+      [hw * 0.25, -hh * 0.9],     // dorsal fin peak
+      [hw * 0.35, -hh * 0.5],     // dorsal fin back
+      [hw * 0.55, -hh * 0.35],    // back slope
+      [hw * 0.75, -hh * 0.15],    // tail peduncle
+      [hw * 0.88, 0],             // tail base
+    ];
+    body.push(...this.bossCurve(dorsalPts, d));
 
-    // Outer hull
-    positions.push(-hw, -hh, d, hw, -hh, d);
-    positions.push(hw, -hh, d, hw, hh, d);
-    positions.push(hw, hh, d, -hw, hh, d);
-    positions.push(-hw, hh, d, -hw, -hh, d);
-    // Back
-    positions.push(-hw, -hh, -d, hw, -hh, -d);
-    positions.push(hw, -hh, -d, hw, hh, -d);
-    positions.push(hw, hh, -d, -hw, hh, -d);
-    positions.push(-hw, hh, -d, -hw, -hh, -d);
-    // Connecting
-    positions.push(-hw, -hh, d, -hw, -hh, -d);
-    positions.push(hw, -hh, d, hw, -hh, -d);
-    positions.push(hw, hh, d, hw, hh, -d);
-    positions.push(-hw, hh, d, -hw, hh, -d);
+    // ── Ventral contour (bottom)
+    const ventralPts: [number, number][] = [
+      [-hw * 0.82, hh * 0.05],    // nose tip (connects to dorsal)
+      [-hw * 0.78, hh * 0.2],     // lower jaw
+      [-hw * 0.6, hh * 0.4],      // jaw angle
+      [-hw * 0.35, hh * 0.5],     // throat grooves area
+      [-hw * 0.05, hh * 0.45],    // belly
+      [hw * 0.2, hh * 0.4],       // mid belly
+      [hw * 0.45, hh * 0.3],      // narrowing
+      [hw * 0.65, hh * 0.15],     // tail taper
+      [hw * 0.88, 0],             // tail base
+    ];
+    body.push(...this.bossCurve(ventralPts, d));
 
-    // Boss-specific inner detail
-    if (def.id === 'whale') {
-      // Whale silhouette - large curved body
-      const segs = 10;
-      for (let i = 0; i < segs; i++) {
-        const t1 = i / segs, t2 = (i + 1) / segs;
-        const x1 = -hw * 0.8 + t1 * hw * 1.6;
-        const x2 = -hw * 0.8 + t2 * hw * 1.6;
-        const y1 = Math.sin(t1 * Math.PI) * hh * 0.5;
-        const y2 = Math.sin(t2 * Math.PI) * hh * 0.5;
-        positions.push(x1, y1, d, x2, y2, d);
-        positions.push(x1, -y1 * 0.3, d, x2, -y2 * 0.3, d);
-      }
-      // Tail
-      positions.push(hw * 0.7, 0, d, hw * 0.9, hh * 0.4, d);
-      positions.push(hw * 0.7, 0, d, hw * 0.9, -hh * 0.4, d);
-      // Eye
-      const eyeR = 3;
-      for (let i = 0; i < 6; i++) {
-        const a1 = (i / 6) * Math.PI * 2, a2 = ((i + 1) / 6) * Math.PI * 2;
-        positions.push(
-          -hw * 0.5 + Math.cos(a1) * eyeR, hh * 0.15 + Math.sin(a1) * eyeR, d,
-          -hw * 0.5 + Math.cos(a2) * eyeR, hh * 0.15 + Math.sin(a2) * eyeR, d
-        );
-      }
-    } else if (def.id === 'liquidator') {
-      // Angular machine - crosshairs and warning lines
-      positions.push(-hw * 0.6, 0, d, hw * 0.6, 0, d);
-      positions.push(0, -hh * 0.6, d, 0, hh * 0.6, d);
-      // Crosshair circle
-      const cr = Math.min(hw, hh) * 0.4;
-      for (let i = 0; i < 8; i++) {
-        const a1 = (i / 8) * Math.PI * 2, a2 = ((i + 1) / 8) * Math.PI * 2;
-        positions.push(Math.cos(a1) * cr, Math.sin(a1) * cr, d, Math.cos(a2) * cr, Math.sin(a2) * cr, d);
-      }
-      // Warning chevrons
-      positions.push(-hw * 0.7, -hh * 0.3, d, -hw * 0.5, 0, d);
-      positions.push(-hw * 0.5, 0, d, -hw * 0.7, hh * 0.3, d);
-      positions.push(hw * 0.7, -hh * 0.3, d, hw * 0.5, 0, d);
-      positions.push(hw * 0.5, 0, d, hw * 0.7, hh * 0.3, d);
-    } else if (def.id === 'flippening') {
-      // Dual form - split down the middle
-      positions.push(0, -hh, d, 0, hh, d);
-      // Left half - bull horn
-      positions.push(-hw * 0.6, hh * 0.3, d, -hw * 0.3, -hh * 0.5, d);
-      positions.push(-hw * 0.3, -hh * 0.5, d, -hw * 0.15, -hh * 0.7, d);
-      // Right half - bear claw
-      positions.push(hw * 0.3, hh * 0.3, d, hw * 0.6, 0, d);
-      positions.push(hw * 0.6, 0, d, hw * 0.5, -hh * 0.3, d);
-      positions.push(hw * 0.6, 0, d, hw * 0.7, -hh * 0.3, d);
-      // Inner diamond
-      const dr = Math.min(hw, hh) * 0.3;
-      positions.push(0, -dr, d, dr, 0, d);
-      positions.push(dr, 0, d, 0, dr, d);
-      positions.push(0, dr, d, -dr, 0, d);
-      positions.push(-dr, 0, d, 0, -dr, d);
+    // ── Fluke tail
+    const flukeUp: [number, number][] = [
+      [hw * 0.88, 0], [hw * 0.95, -hh * 0.2], [hw, -hh * 0.55], [hw * 1.05, -hh * 0.7],
+    ];
+    const flukeDown: [number, number][] = [
+      [hw * 0.88, 0], [hw * 0.95, hh * 0.2], [hw, hh * 0.55], [hw * 1.05, hh * 0.7],
+    ];
+    body.push(...this.bossCurve(flukeUp, d));
+    body.push(...this.bossCurve(flukeDown, d));
+    // Fluke trailing edge
+    body.push(hw * 1.05, -hh * 0.7, d, hw * 0.98, -hh * 0.35, d);
+    body.push(hw * 1.05, hh * 0.7, d, hw * 0.98, hh * 0.35, d);
+
+    // ── Dorsal fin inner ridge
+    detail.push(hw * 0.18, -hh * 0.5, d, hw * 0.25, -hh * 0.85, d);
+    detail.push(hw * 0.25, -hh * 0.85, d, hw * 0.32, -hh * 0.5, d);
+
+    // ── Pectoral fin
+    const pectPts: [number, number][] = [
+      [-hw * 0.15, hh * 0.3], [-hw * 0.3, hh * 0.65], [-hw * 0.15, hh * 0.75], [-hw * 0.02, hh * 0.45],
+    ];
+    body.push(...this.bossCurve(pectPts, d));
+    body.push(-hw * 0.02, hh * 0.45, d, -hw * 0.15, hh * 0.3, d); // close
+
+    // ── Mouth line
+    detail.push(-hw * 0.8, hh * 0.1, d, -hw * 0.55, hh * 0.25, d);
+    // Baleen lines
+    for (let i = 0; i < 4; i++) {
+      const t = i / 3;
+      const mx = -hw * 0.78 + t * hw * 0.25;
+      const my1 = hh * 0.1 + t * hh * 0.1;
+      detail.push(mx, my1, d, mx, my1 + hh * 0.12, d);
     }
 
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    const thickGeo = thickenGeo(geo, 0.08, 2);
+    // ── Throat grooves (ventral pleats)
+    for (let i = 0; i < 5; i++) {
+      const t = i / 4;
+      const gx = -hw * 0.5 + t * hw * 0.55;
+      const gy = hh * 0.35 + Math.sin(t * Math.PI) * hh * 0.1;
+      detail.push(gx, gy, d, gx + hw * 0.08, gy + hh * 0.04, d);
+    }
 
-    const core = new THREE.LineSegments(thickGeo,
-      new THREE.LineBasicMaterial({
-        color: def.color, transparent: true, opacity: 0.6,
-        fog: false, toneMapped: false,
-      }));
-    core.renderOrder = 6;
-    group.add(core);
+    // ── Eye (outer + inner)
+    const eyeX = -hw * 0.5, eyeY = -hh * 0.12;
+    detail.push(...this.bossCircle(eyeX, eyeY, d, 4, 10));
+    detail.push(...this.bossCircle(eyeX, eyeY, d, 1.8, 6));
+    hotglowPos.push(...this.bossCircle(eyeX, eyeY, d, 4, 10));
+    hotglowPos.push(...this.bossCircle(eyeX, eyeY, d, 1.8, 6));
+
+    // ── Bioluminescent pattern (dots along body)
+    const bioSpots: [number, number][] = [
+      [-hw * 0.2, -hh * 0.2], [hw * 0.0, -hh * 0.25], [hw * 0.2, -hh * 0.22],
+      [hw * 0.4, -hh * 0.18], [hw * 0.55, -hh * 0.1],
+      [-hw * 0.1, hh * 0.15], [hw * 0.1, hh * 0.2], [hw * 0.3, hh * 0.15],
+    ];
+    for (const [bx, by] of bioSpots) {
+      detail.push(...this.bossCircle(bx, by, d, 1.5, 5));
+      hotglowPos.push(...this.bossCircle(bx, by, d, 1.5, 5));
+    }
+
+    // ── Ribcage lines (faint skeletal structure)
+    for (let i = 0; i < 5; i++) {
+      const t = i / 4;
+      const rx = -hw * 0.15 + t * hw * 0.5;
+      const topY = -hh * 0.4 + Math.sin(t * Math.PI * 0.5) * hh * 0.1;
+      const botY = hh * 0.3 - Math.sin(t * Math.PI * 0.5) * hh * 0.05;
+      detail.push(rx, topY, d, rx + hw * 0.02, botY, d);
+    }
+
+    // ── Back face (simplified silhouette)
+    body.push(...this.bossCurve([dorsalPts[0], dorsalPts[3], dorsalPts[6], dorsalPts[10]], -d));
+    body.push(...this.bossCurve([ventralPts[0], ventralPts[3], ventralPts[6], ventralPts[8]], -d));
+    // Connect key points front to back
+    for (const pt of [dorsalPts[0], dorsalPts[6], dorsalPts[10], flukeUp[3], flukeDown[3]]) {
+      body.push(pt[0], pt[1], d, pt[0], pt[1], -d);
+    }
+
+    // Build meshes
+    group.add(this.bossLineGroup(body, def.color, 0.7, 0.10, false, 'body'));
+    group.add(this.bossLineGroup(detail, def.color, 0.45, 0.06, false, 'detail'));
 
     // Fill
-    const fill = new THREE.Mesh(
+    group.add(new THREE.Mesh(
       new THREE.PlaneGeometry(def.width - 4, def.height - 4),
-      new THREE.MeshBasicMaterial({
-        color: def.color, transparent: true, opacity: 0.04,
-        side: THREE.DoubleSide,
-      }));
-    group.add(fill);
+      new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.03, side: THREE.DoubleSide })));
+
+    // Glow (body outline)
+    const glowMesh = this.bossLineGroup(body, def.color, 0.2, 0.10, true, 'glow');
+    glowMesh.scale.setScalar(1.06);
+    group.add(glowMesh);
+
+    // HDR hotglow on eye + bioluminescence
+    const hdrColor = new THREE.Color(def.color).multiplyScalar(3.0);
+    group.add(this.bossLineGroup(hotglowPos, hdrColor, 0.2, 0.08, true, 'hotglow'));
+
+    // ── Animated: water spout
+    const spoutPos: number[] = [];
+    const spoutX = -hw * 0.1, spoutBaseY = -hh * 0.55;
+    for (let i = 0; i < 5; i++) {
+      const spread = (i - 2) * 3;
+      spoutPos.push(spoutX + spread * 0.3, spoutBaseY, d,
+                     spoutX + spread, spoutBaseY - 18 - Math.abs(spread) * 0.5, d);
+    }
+    // Cross lines in spray
+    spoutPos.push(spoutX - 6, spoutBaseY - 14, d, spoutX + 6, spoutBaseY - 14, d);
+    spoutPos.push(spoutX - 4, spoutBaseY - 8, d, spoutX + 4, spoutBaseY - 8, d);
+    const spoutGroup = new THREE.Group();
+    spoutGroup.name = 'anim_spout';
+    spoutGroup.add(this.bossLineGroup(spoutPos, hdrColor, 0.3, 0.06, true));
+    group.add(spoutGroup);
+
+    // ── Animated: eye sparkle
+    const eyeSparkPos: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2;
+      eyeSparkPos.push(eyeX + Math.cos(a) * 1, eyeY + Math.sin(a) * 1, d + 1,
+                        eyeX + Math.cos(a) * 3.5, eyeY + Math.sin(a) * 3.5, d + 1);
+    }
+    const eyeGroup = new THREE.Group();
+    eyeGroup.name = 'anim_eye';
+    eyeGroup.add(this.bossLineGroup(eyeSparkPos, 0xffffff, 0.5, 0.04, true));
+    group.add(eyeGroup);
+
+    return group;
+  }
+
+  private makeLiquidatorMesh(def: BossDefinition): THREE.Group {
+    const group = new THREE.Group();
+    const hw = def.width / 2, hh = def.height / 2;
+    const d = 4;
+    const body: number[] = [];
+    const detail: number[] = [];
+    const hotglowPos: number[] = [];
+
+    // ── Angular hull (octagonal aggressive shape)
+    const hullPts: [number, number][] = [
+      [-hw * 0.5, -hh],           // top-left inner
+      [hw * 0.5, -hh],            // top-right inner
+      [hw, -hh * 0.45],           // right upper bevel
+      [hw, hh * 0.45],            // right lower bevel
+      [hw * 0.7, hh],             // bottom-right
+      [-hw * 0.7, hh],            // bottom-left
+      [-hw, hh * 0.45],           // left lower bevel
+      [-hw, -hh * 0.45],          // left upper bevel
+    ];
+    // Close the hull
+    for (let i = 0; i < hullPts.length; i++) {
+      const [x1, y1] = hullPts[i];
+      const [x2, y2] = hullPts[(i + 1) % hullPts.length];
+      body.push(x1, y1, d, x2, y2, d);
+    }
+    // Back face
+    for (let i = 0; i < hullPts.length; i++) {
+      const [x1, y1] = hullPts[i];
+      const [x2, y2] = hullPts[(i + 1) % hullPts.length];
+      body.push(x1, y1, -d, x2, y2, -d);
+      body.push(x1, y1, d, x1, y1, -d); // connect front to back
+    }
+
+    // ── Inner frame (structural crossbars)
+    detail.push(0, -hh * 0.85, d, 0, hh * 0.85, d); // vertical spine
+    detail.push(-hw * 0.75, 0, d, hw * 0.75, 0, d);  // horizontal bar
+    detail.push(-hw * 0.55, -hh * 0.55, d, hw * 0.55, -hh * 0.55, d); // upper bar
+    detail.push(-hw * 0.45, hh * 0.55, d, hw * 0.45, hh * 0.55, d);   // lower bar
+
+    // ── Warning chevrons (left side)
+    for (let i = 0; i < 3; i++) {
+      const cy = -hh * 0.3 + i * hh * 0.3;
+      body.push(-hw * 0.88, cy - hh * 0.1, d, -hw * 0.7, cy, d);
+      body.push(-hw * 0.7, cy, d, -hw * 0.88, cy + hh * 0.1, d);
+    }
+    // Right side
+    for (let i = 0; i < 3; i++) {
+      const cy = -hh * 0.3 + i * hh * 0.3;
+      body.push(hw * 0.88, cy - hh * 0.1, d, hw * 0.7, cy, d);
+      body.push(hw * 0.7, cy, d, hw * 0.88, cy + hh * 0.1, d);
+    }
+
+    // ── Threat level bars (right of center)
+    for (let i = 0; i < 5; i++) {
+      const by = -hh * 0.4 + i * hh * 0.18;
+      const bw = hw * 0.15;
+      detail.push(hw * 0.45, by, d, hw * 0.45 + bw, by, d);
+      hotglowPos.push(hw * 0.45, by, d, hw * 0.45 + bw, by, d);
+    }
+
+    // ── Piston details at quadrant intersections
+    const pistonW = 3, pistonH = 5;
+    const pistonPts: [number, number][] = [
+      [-hw * 0.35, -hh * 0.35], [hw * 0.35, -hh * 0.35],
+      [-hw * 0.3, hh * 0.35], [hw * 0.3, hh * 0.35],
+    ];
+    for (const [px, py] of pistonPts) {
+      detail.push(px - pistonW, py - pistonH, d, px + pistonW, py - pistonH, d);
+      detail.push(px + pistonW, py - pistonH, d, px + pistonW, py + pistonH, d);
+      detail.push(px + pistonW, py + pistonH, d, px - pistonW, py + pistonH, d);
+      detail.push(px - pistonW, py + pistonH, d, px - pistonW, py - pistonH, d);
+      detail.push(px, py - pistonH, d, px, py + pistonH, d); // piston rod
+    }
+
+    // ── Scanner array (top sensor strip)
+    detail.push(-hw * 0.4, -hh * 0.72, d, hw * 0.4, -hh * 0.72, d);
+    detail.push(-hw * 0.4, -hh * 0.8, d, hw * 0.4, -hh * 0.8, d);
+    for (let i = 0; i < 6; i++) {
+      const sx = -hw * 0.35 + i * hw * 0.14;
+      detail.push(sx, -hh * 0.72, d, sx, -hh * 0.8, d);
+    }
+
+    // ── Vent slits (flanks)
+    for (let side = -1; side <= 1; side += 2) {
+      for (let i = 0; i < 3; i++) {
+        const vy = -hh * 0.1 + i * hh * 0.15;
+        detail.push(side * hw * 0.55, vy, d, side * hw * 0.72, vy, d);
+      }
+    }
+
+    // ── Gear suggestion (central small zigzag circle)
+    const gr = 5, gSegs = 12;
+    for (let i = 0; i < gSegs; i++) {
+      const a1 = (i / gSegs) * Math.PI * 2;
+      const a2 = ((i + 1) / gSegs) * Math.PI * 2;
+      const r1 = i % 2 === 0 ? gr : gr * 0.7;
+      const r2 = (i + 1) % 2 === 0 ? gr : gr * 0.7;
+      detail.push(Math.cos(a1) * r1, Math.sin(a1) * r1, d,
+                   Math.cos(a2) * r2, Math.sin(a2) * r2, d);
+    }
+
+    // Build meshes
+    group.add(this.bossLineGroup(body, def.color, 0.7, 0.10, false, 'body'));
+    group.add(this.bossLineGroup(detail, def.color, 0.4, 0.06, false, 'detail'));
+
+    // Fill
+    group.add(new THREE.Mesh(
+      new THREE.PlaneGeometry(def.width - 4, def.height - 4),
+      new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.03, side: THREE.DoubleSide })));
 
     // Glow
-    const glow = new THREE.LineSegments(thickGeo.clone(),
-      new THREE.LineBasicMaterial({
-        color: def.color, transparent: true, opacity: 0.2,
-        blending: THREE.AdditiveBlending,
-        depthTest: false, depthWrite: false,
-        fog: false, toneMapped: false,
-      }));
-    glow.scale.setScalar(1.06);
-    glow.renderOrder = 5;
-    group.add(glow);
+    const glowMesh = this.bossLineGroup(body, def.color, 0.2, 0.10, true, 'glow');
+    glowMesh.scale.setScalar(1.06);
+    group.add(glowMesh);
+
+    // HDR hotglow
+    const hdrColor = new THREE.Color(def.color).multiplyScalar(3.0);
+    group.add(this.bossLineGroup(hotglowPos, hdrColor, 0.2, 0.08, true, 'hotglow'));
+
+    // ── Animated: rotating crosshair
+    const crossPos: number[] = [];
+    const outerR = Math.min(hw, hh) * 0.5;
+    const innerR = outerR * 0.45;
+    crossPos.push(...this.bossCircle(0, 0, d + 1, outerR, 20));
+    crossPos.push(...this.bossCircle(0, 0, d + 1, innerR, 12));
+    hotglowPos.push(...this.bossCircle(0, 0, d + 1, outerR, 20));
+    // Cardinal crosshair lines (with gap)
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2;
+      crossPos.push(Math.cos(a) * innerR * 1.2, Math.sin(a) * innerR * 1.2, d + 1,
+                     Math.cos(a) * outerR * 0.85, Math.sin(a) * outerR * 0.85, d + 1);
+    }
+    // Diagonal tick marks
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      crossPos.push(Math.cos(a) * outerR * 0.75, Math.sin(a) * outerR * 0.75, d + 1,
+                     Math.cos(a) * outerR * 0.95, Math.sin(a) * outerR * 0.95, d + 1);
+    }
+    // Center dot (diamond)
+    const cd = 2;
+    crossPos.push(0, -cd, d + 1, cd, 0, d + 1);
+    crossPos.push(cd, 0, d + 1, 0, cd, d + 1);
+    crossPos.push(0, cd, d + 1, -cd, 0, d + 1);
+    crossPos.push(-cd, 0, d + 1, 0, -cd, d + 1);
+
+    const crosshairGroup = new THREE.Group();
+    crosshairGroup.name = 'anim_crosshair';
+    crosshairGroup.add(this.bossLineGroup(crossPos, hdrColor, 0.5, 0.07, true));
+    group.add(crosshairGroup);
+
+    // ── Animated: scanning lines
+    const scanPos: number[] = [];
+    scanPos.push(-hw * 0.85, 0, d + 0.5, hw * 0.85, 0, d + 0.5);
+    scanPos.push(-hw * 0.7, 2, d + 0.5, hw * 0.7, 2, d + 0.5);
+    const scanGroup = new THREE.Group();
+    scanGroup.name = 'anim_scanlines';
+    scanGroup.add(this.bossLineGroup(scanPos, hdrColor, 0.25, 0.05, true));
+    group.add(scanGroup);
+
+    return group;
+  }
+
+  private makeFlippeningMesh(def: BossDefinition): THREE.Group {
+    const group = new THREE.Group();
+    const hw = def.width / 2, hh = def.height / 2;
+    const d = 4;
+    const body: number[] = [];
+    const detail: number[] = [];
+    const hotglowPos: number[] = [];
+
+    // ── Central dividing line (bold)
+    body.push(0, -hh * 1.1, d, 0, hh * 1.1, d);
+    body.push(0, -hh * 1.1, -d, 0, hh * 1.1, -d);
+    body.push(0, -hh * 1.1, d, 0, -hh * 1.1, -d);
+    body.push(0, hh * 1.1, d, 0, hh * 1.1, -d);
+
+    // ── Left half: BULL
+    // Head outline
+    const bullHead: [number, number][] = [
+      [0, -hh * 0.4],
+      [-hw * 0.2, -hh * 0.35],
+      [-hw * 0.4, -hh * 0.2],
+      [-hw * 0.55, -hh * 0.05],
+      [-hw * 0.6, hh * 0.05],     // snout
+      [-hw * 0.55, hh * 0.15],
+      [-hw * 0.45, hh * 0.25],
+      [-hw * 0.3, hh * 0.35],
+      [-hw * 0.15, hh * 0.4],
+      [0, hh * 0.4],
+    ];
+    body.push(...this.bossCurve(bullHead, d));
+
+    // Left horn (sweeping upward curve)
+    const hornL: [number, number][] = [
+      [-hw * 0.3, -hh * 0.3],
+      [-hw * 0.4, -hh * 0.6],
+      [-hw * 0.55, -hh * 0.85],
+      [-hw * 0.7, -hh * 1.0],
+      [-hw * 0.8, -hh * 1.05],    // tip curves outward
+    ];
+    body.push(...this.bossCurve(hornL, d));
+    // Horn inner ridge
+    detail.push(-hw * 0.35, -hh * 0.4, d, -hw * 0.6, -hh * 0.88, d);
+
+    // Right horn (partially visible, foreshortened)
+    const hornR: [number, number][] = [
+      [-hw * 0.15, -hh * 0.35],
+      [-hw * 0.2, -hh * 0.65],
+      [-hw * 0.25, -hh * 0.9],
+    ];
+    body.push(...this.bossCurve(hornR, d));
+
+    // Bull eye
+    const bullEyeX = -hw * 0.4, bullEyeY = -hh * 0.05;
+    detail.push(...this.bossCircle(bullEyeX, bullEyeY, d, 2.5, 8));
+    hotglowPos.push(...this.bossCircle(bullEyeX, bullEyeY, d, 2.5, 8));
+
+    // Nostril
+    detail.push(-hw * 0.52, hh * 0.05, d, -hw * 0.5, hh * 0.1, d);
+    detail.push(-hw * 0.48, hh * 0.05, d, -hw * 0.47, hh * 0.1, d);
+
+    // Muscular shoulder lines
+    detail.push(-hw * 0.1, -hh * 0.15, d, -hw * 0.2, hh * 0.1, d);
+    detail.push(-hw * 0.15, -hh * 0.1, d, -hw * 0.25, hh * 0.15, d);
+
+    // ── Right half: BEAR
+    // Head outline
+    const bearHead: [number, number][] = [
+      [0, -hh * 0.4],
+      [hw * 0.15, -hh * 0.4],
+      [hw * 0.3, -hh * 0.35],
+      [hw * 0.45, -hh * 0.2],
+      [hw * 0.55, -hh * 0.05],
+      [hw * 0.6, hh * 0.1],       // snout
+      [hw * 0.55, hh * 0.2],      // jaw
+      [hw * 0.45, hh * 0.3],
+      [hw * 0.3, hh * 0.35],
+      [hw * 0.15, hh * 0.4],
+      [0, hh * 0.4],
+    ];
+    body.push(...this.bossCurve(bearHead, d));
+
+    // Bear ears
+    const earL: [number, number][] = [
+      [hw * 0.2, -hh * 0.4], [hw * 0.22, -hh * 0.65], [hw * 0.3, -hh * 0.7], [hw * 0.35, -hh * 0.55], [hw * 0.32, -hh * 0.38],
+    ];
+    body.push(...this.bossCurve(earL, d));
+    const earR: [number, number][] = [
+      [hw * 0.38, -hh * 0.32], [hw * 0.42, -hh * 0.6], [hw * 0.5, -hh * 0.62], [hw * 0.53, -hh * 0.5], [hw * 0.48, -hh * 0.28],
+    ];
+    body.push(...this.bossCurve(earR, d));
+
+    // Bear eye + angry brow
+    const bearEyeX = hw * 0.38, bearEyeY = -hh * 0.08;
+    detail.push(...this.bossCircle(bearEyeX, bearEyeY, d, 2.5, 8));
+    detail.push(bearEyeX - 3, bearEyeY - 4, d, bearEyeX + 3, bearEyeY - 3, d); // angry brow
+    hotglowPos.push(...this.bossCircle(bearEyeX, bearEyeY, d, 2.5, 8));
+
+    // Bear teeth (along jaw)
+    for (let i = 0; i < 4; i++) {
+      const tx = hw * 0.4 + i * 4;
+      const ty = hh * 0.2;
+      detail.push(tx, ty, d, tx + 1.5, ty + 4, d);
+      detail.push(tx + 1.5, ty + 4, d, tx + 3, ty, d);
+    }
+
+    // Claws (3 slash marks below bear jaw)
+    for (let i = 0; i < 3; i++) {
+      const cx = hw * 0.35 + i * 6;
+      const clawPts: [number, number][] = [
+        [cx, hh * 0.35], [cx + 2, hh * 0.55], [cx + 1, hh * 0.75],
+      ];
+      body.push(...this.bossCurve(clawPts, d));
+    }
+
+    // Fur texture (short lines along bear contour)
+    const furPts: [number, number][] = [
+      [hw * 0.5, -hh * 0.15], [hw * 0.55, -hh * 0.0], [hw * 0.52, hh * 0.1],
+      [hw * 0.45, hh * 0.22], [hw * 0.35, hh * 0.3],
+    ];
+    for (const [fx, fy] of furPts) {
+      const a = Math.atan2(fy, fx - hw * 0.3);
+      detail.push(fx, fy, d, fx + Math.cos(a) * 4, fy + Math.sin(a) * 4, d);
+    }
+
+    // ── Energy conduit lines (from center to each half)
+    const conduitTargets: [number, number][] = [
+      [-hw * 0.3, -hh * 0.25], [-hw * 0.25, 0], [-hw * 0.3, hh * 0.25],
+      [hw * 0.3, -hh * 0.25], [hw * 0.25, 0], [hw * 0.3, hh * 0.25],
+    ];
+    for (const [cx, cy] of conduitTargets) {
+      detail.push(0, 0, d, cx, cy, d);
+      hotglowPos.push(0, 0, d, cx, cy, d);
+      // Energy tick marks along conduit
+      const len = Math.sqrt(cx * cx + cy * cy);
+      for (let t = 0.3; t < 0.9; t += 0.3) {
+        const px = cx * t, py = cy * t;
+        const nx = -cy / len * 2, ny = cx / len * 2;
+        detail.push(px - nx, py - ny, d, px + nx, py + ny, d);
+      }
+    }
+
+    // ── S-curve yin-yang divider overlay
+    const sCurve: [number, number][] = [];
+    for (let i = 0; i <= 12; i++) {
+      const t = i / 12;
+      const y = -hh * 0.5 + t * hh;
+      const x = Math.sin(t * Math.PI * 2) * hw * 0.08;
+      sCurve.push([x, y]);
+    }
+    detail.push(...this.bossCurve(sCurve, d));
+
+    // ── Back face and connections
+    body.push(...this.bossCurve([bullHead[0], bullHead[3], bullHead[6], bullHead[9]], -d));
+    body.push(...this.bossCurve([bearHead[0], bearHead[3], bearHead[6], bearHead[10]], -d));
+    // Connect horn tips and claw tips
+    body.push(hornL[4][0], hornL[4][1], d, hornL[4][0], hornL[4][1], -d);
+    body.push(bearHead[5][0], bearHead[5][1], d, bearHead[5][0], bearHead[5][1], -d);
+
+    // Build meshes
+    group.add(this.bossLineGroup(body, def.color, 0.7, 0.10, false, 'body'));
+    group.add(this.bossLineGroup(detail, def.color, 0.4, 0.06, false, 'detail'));
+
+    // Fill
+    group.add(new THREE.Mesh(
+      new THREE.PlaneGeometry(def.width - 4, def.height - 4),
+      new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.03, side: THREE.DoubleSide })));
+
+    // Glow
+    const glowMesh = this.bossLineGroup(body, def.color, 0.2, 0.10, true, 'glow');
+    glowMesh.scale.setScalar(1.06);
+    group.add(glowMesh);
+
+    // HDR hotglow
+    const hdrColor = new THREE.Color(def.color).multiplyScalar(3.0);
+    group.add(this.bossLineGroup(hotglowPos, hdrColor, 0.2, 0.08, true, 'hotglow'));
+
+    // ── Animated: central rotating core diamond
+    const corePos: number[] = [];
+    const outerD = 9, innerD = 6;
+    // Outer diamond
+    corePos.push(0, -outerD, d + 1, outerD, 0, d + 1);
+    corePos.push(outerD, 0, d + 1, 0, outerD, d + 1);
+    corePos.push(0, outerD, d + 1, -outerD, 0, d + 1);
+    corePos.push(-outerD, 0, d + 1, 0, -outerD, d + 1);
+    // Inner diamond (rotated 45deg = square)
+    const id = innerD * 0.707;
+    corePos.push(-id, -id, d + 1, id, -id, d + 1);
+    corePos.push(id, -id, d + 1, id, id, d + 1);
+    corePos.push(id, id, d + 1, -id, id, d + 1);
+    corePos.push(-id, id, d + 1, -id, -id, d + 1);
+    // Connecting lines inner to outer
+    corePos.push(0, -outerD, d + 1, -id, -id, d + 1);
+    corePos.push(outerD, 0, d + 1, id, -id, d + 1);
+    corePos.push(0, outerD, d + 1, id, id, d + 1);
+    corePos.push(-outerD, 0, d + 1, -id, id, d + 1);
+    // Center circle
+    corePos.push(...this.bossCircle(0, 0, d + 1, 3, 8));
+
+    const coreGroup = new THREE.Group();
+    coreGroup.name = 'anim_core';
+    coreGroup.add(this.bossLineGroup(corePos, hdrColor, 0.5, 0.07, true));
+    group.add(coreGroup);
+
+    // ── Animated: bull energy (horn tip crackle)
+    const bullEnergyPos: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      const a = Math.random() * Math.PI;
+      const tipX = hornL[4][0], tipY = hornL[4][1];
+      bullEnergyPos.push(tipX, tipY, d, tipX + Math.cos(a) * 6, tipY + Math.sin(a) * 6, d);
+    }
+    const bullEGroup = new THREE.Group();
+    bullEGroup.name = 'anim_bull_energy';
+    bullEGroup.add(this.bossLineGroup(bullEnergyPos, new THREE.Color(0x00ff88).multiplyScalar(2.5), 0.35, 0.05, true));
+    group.add(bullEGroup);
+
+    // ── Animated: bear energy (claw crackle)
+    const bearEnergyPos: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      const a = Math.random() * Math.PI + Math.PI * 0.5;
+      const tipX = hw * 0.45 + i * 3, tipY = hh * 0.7;
+      bearEnergyPos.push(tipX, tipY, d, tipX + Math.cos(a) * 5, tipY + Math.sin(a) * 5, d);
+    }
+    const bearEGroup = new THREE.Group();
+    bearEGroup.name = 'anim_bear_energy';
+    bearEGroup.add(this.bossLineGroup(bearEnergyPos, new THREE.Color(0xff2222).multiplyScalar(2.5), 0.35, 0.05, true));
+    group.add(bearEGroup);
 
     return group;
   }
@@ -1996,22 +2480,15 @@ export class Renderer {
         ctx.fillText(d.eventLabel, W - eventW - pad, row2Y);
       }
 
-      // Boss HP bar (top area, below ticker)
+      // Boss HP bar — full-width thin strip at very top of screen
       if (d.bossName && d.bossHp != null) {
-        const barW = W * 0.6;
-        const barH = 14 * sy;
-        const barX = (W - barW) / 2;
-        const barY = 62 * sy;
-
-        // Boss name
-        ctx.font = `bold ${smallFont}px "Courier New", monospace`;
-        ctx.fillStyle = '#cc4444';
-        ctx.textAlign = 'center';
-        ctx.fillText(d.bossName, W / 2, barY - 6 * sy);
-        ctx.textAlign = 'left';
+        const barW = W;
+        const barH = 6 * sy;
+        const barX = 0;
+        const barY = 0;
 
         // Bar background
-        ctx.fillStyle = 'rgba(80, 0, 0, 0.5)';
+        ctx.fillStyle = 'rgba(60, 0, 0, 0.4)';
         ctx.fillRect(barX, barY, barW, barH);
 
         // HP fill
@@ -2020,10 +2497,12 @@ export class Renderer {
         ctx.fillStyle = hpColor;
         ctx.fillRect(barX, barY, barW * hpFill, barH);
 
-        // Bar border
-        ctx.strokeStyle = '#662222';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(barX, barY, barW, barH);
+        // Boss name — small, right-aligned next to HP bar
+        ctx.font = `bold ${Math.floor(smallFont * 0.85)}px "Courier New", monospace`;
+        ctx.fillStyle = '#994444';
+        ctx.textAlign = 'right';
+        ctx.fillText(d.bossName, W - 8 * sx, barY + barH + 14 * sy);
+        ctx.textAlign = 'left';
       }
     }
 

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Renderer } from './Renderer';
 import { animateBackground as animateBackgroundFx, buildBackground } from './Background';
+import type { BackgroundRuntimeControls } from './Background';
 import { GAME_WIDTH, GAME_HEIGHT } from './constants';
 import { BRICK_TYPES } from './data/brickTypes';
 import { POWERUP_TYPES, POSITIVE_POWERUPS, NEGATIVE_POWERUPS } from './data/powerups';
@@ -197,6 +198,12 @@ export class Game {
         // Debug: B = trigger boss fight on current stage (if it has one)
         if (e.code === 'KeyB') {
           this.debugTriggerBoss();
+        }
+        // Debug: F = jump to final boss (stage 10 boss)
+        if (e.code === 'KeyF') {
+          this.currentLevel = LEVEL_ORDER.length - 1;
+          this.debugJumpToLevel();
+          setTimeout(() => this.debugTriggerBoss(), 500);
         }
         // Debug: E = trigger a random event
         if (e.code === 'KeyE') {
@@ -576,9 +583,26 @@ export class Game {
   };
 
   private animateBackground(now: number) {
+    const moodPulse = this.currentModifiers?.visualProfile.backgroundPulse ?? 0.5;
+    const eventPulse = this.eventSystem.isEventActive() ? 1 : 0;
+    const parallaxX = clamp((this.paddleX / GAME_WIDTH - 0.5) * 2, -1, 1);
+    const leadBall = this.balls[0];
+    const parallaxY = leadBall ? clamp((leadBall.y / GAME_HEIGHT - 0.5) * 2, -1, 1) : 0;
+    const ballSpeed = leadBall ? Math.hypot(leadBall.vx, leadBall.vy) : B.BALL_BASE_SPEED;
+    const expectedBase = B.BALL_BASE_SPEED * this.riskProfile.modifiers.ballSpeedMult;
+    const ballEnergy = clamp(ballSpeed / Math.max(1, expectedBase), 0.5, 1.8);
+
+    const controls: BackgroundRuntimeControls = {
+      moodPulse,
+      eventPulse,
+      parallaxX,
+      parallaxY,
+      ballEnergy,
+    };
+
     for (const child of this.r.bgGroup.children) {
       if (child instanceof THREE.Group) {
-        animateBackgroundFx(child, now);
+        animateBackgroundFx(child, now, controls);
       }
     }
   }
@@ -682,6 +706,47 @@ export class Game {
         this.bossMesh.visible = Math.sin(this.gameTime * 20) > 0;
       } else {
         this.bossMesh.visible = true;
+      }
+
+      // Animate boss sub-parts
+      const t = this.gameTime;
+
+      // Whale: spout pulse + eye sparkle rotation
+      const spout = this.bossMesh.getObjectByName('anim_spout');
+      if (spout) {
+        spout.scale.y = 0.7 + Math.sin(t * 2.5) * 0.4;
+        const spoutMat = (spout.children[0] as THREE.LineSegments).material as THREE.LineBasicMaterial;
+        spoutMat.opacity = 0.15 + Math.sin(t * 3) * 0.15;
+      }
+      const eye = this.bossMesh.getObjectByName('anim_eye');
+      if (eye) eye.rotation.z += dt * 1.5;
+
+      // Liquidator: crosshair rotation + scan line sweep
+      const crosshair = this.bossMesh.getObjectByName('anim_crosshair');
+      if (crosshair) crosshair.rotation.z += dt * 2.0;
+      const scan = this.bossMesh.getObjectByName('anim_scanlines');
+      if (scan) {
+        scan.position.y = Math.sin(t * 3) * (boss.height * 0.3);
+        const scanMat = (scan.children[0] as THREE.LineSegments).material as THREE.LineBasicMaterial;
+        scanMat.opacity = 0.15 + Math.sin(t * 6) * 0.1;
+      }
+
+      // Flippening: core rotation + energy pulses
+      const core = this.bossMesh.getObjectByName('anim_core');
+      if (core) core.rotation.z += dt * 1.2;
+      const bullE = this.bossMesh.getObjectByName('anim_bull_energy');
+      if (bullE) {
+        const s = 0.85 + Math.sin(t * 5) * 0.15;
+        bullE.scale.set(s, s, 1);
+        const mat = (bullE.children[0] as THREE.LineSegments).material as THREE.LineBasicMaterial;
+        mat.opacity = 0.2 + Math.sin(t * 7) * 0.15;
+      }
+      const bearE = this.bossMesh.getObjectByName('anim_bear_energy');
+      if (bearE) {
+        const s = 0.85 + Math.sin(t * 5 + Math.PI) * 0.15;
+        bearE.scale.set(s, s, 1);
+        const mat = (bearE.children[0] as THREE.LineSegments).material as THREE.LineBasicMaterial;
+        mat.opacity = 0.2 + Math.sin(t * 7 + Math.PI) * 0.15;
       }
     }
 
@@ -853,7 +918,7 @@ export class Game {
 
       case 'shieldSpawn': {
         // Spawn a row of tough bricks in front of the boss (once at start of attack)
-        if (attack.elapsed < 100) {
+        if (attack.elapsed < 100 && !this.bricks.some(b => b.alive && b.isBossSupport && Math.abs(b.y - (boss.y + boss.height / 2 + 30)) < 5)) {
           const shieldY = boss.y + boss.height / 2 + 30;
           const count = 4;
           const spacing = boss.width / count;
@@ -1039,7 +1104,7 @@ export class Game {
     // Create boss visual
     this.bossMesh = this.r.makeBossMesh(bossDef);
     this.r.scene.add(this.bossMesh);
-    this.r.setPos(this.bossMesh, GAME_WIDTH / 2, 80);
+    this.r.setPos(this.bossMesh, GAME_WIDTH / 2, 100);
 
     // Boss intro callout
     this.r.showCallout(GAME_WIDTH / 2, GAME_HEIGHT / 2 - 50, bossDef.introCallout, '#ff4444', 32);

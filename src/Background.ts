@@ -1,9 +1,132 @@
 import * as THREE from 'three';
+import { SVGLoader } from 'three/examples/jsm/loaders/SVGLoader.js';
 import { GAME_WIDTH, GAME_HEIGHT } from './constants';
 import type { Renderer } from './Renderer';
+import aaveSvg from '../logos/aave-aave-logo.svg?raw';
+import avaxSvg from '../logos/avalanche-avax-logo.svg?raw';
+import adaSvg from '../logos/cardano-ada-logo.svg?raw';
+import atomSvg from '../logos/cosmos-atom-logo.svg?raw';
+import bnbSvg from '../logos/bnb-bnb-logo.svg?raw';
+import btcSvg from '../logos/bitcoin-btc-logo.svg?raw';
+import daiSvg from '../logos/multi-collateral-dai-dai-logo.svg?raw';
+import dogeSvg from '../logos/dogecoin-doge-logo.svg?raw';
+import ethSvg from '../logos/ethereum-eth-logo.svg?raw';
+import linkSvg from '../logos/chainlink-link-logo.svg?raw';
+import ltcSvg from '../logos/litecoin-ltc-logo.svg?raw';
+import solSvg from '../logos/solana-sol-logo.svg?raw';
+import uniSvg from '../logos/uniswap-uni-logo.svg?raw';
+import usdcSvg from '../logos/usd-coin-usdc-logo.svg?raw';
+import xmrSvg from '../logos/monero-xmr-logo.svg?raw';
+import xrpSvg from '../logos/xrp-xrp-logo.svg?raw';
+import antennaMastSvg from '../logos/antenna-mast.svg?raw';
+import bearClawSvg from '../logos/bear-claw.svg?raw';
+import bullHornsSvg from '../logos/bull-horns.svg?raw';
+import candlestickSvg from '../logos/candlestick.svg?raw';
+import chainLinkSvg from '../logos/chain-link.svg?raw';
+import circuitPanelSvg from '../logos/circuit-panel.svg?raw';
+import diamondSvg from '../logos/diamond.svg?raw';
+import gatewayFrameSvg from '../logos/gateway-frame.svg?raw';
+import hexGridTileSvg from '../logos/hex-grid-tile.svg?raw';
+import lightningBoltSvg from '../logos/lightning-bolt.svg?raw';
+import pipeFlangeSvg from '../logos/pipe-flange.svg?raw';
+import radialRingSvg from '../logos/radial-ring.svg?raw';
+import rocketGlyphSvg from '../logos/rocket.svg?raw';
+import serverRackSvg from '../logos/server-rack.svg?raw';
+import skullGlyphSvg from '../logos/skull.svg?raw';
+import trussSegmentSvg from '../logos/truss-segment.svg?raw';
+import vaultDoorSvg from '../logos/vault-door.svg?raw';
+import warningTriangleSvg from '../logos/warning-triangle.svg?raw';
+import whaleTailSvg from '../logos/whale-tail.svg?raw';
 
 const HW = GAME_WIDTH / 2;
 const HH = GAME_HEIGHT / 2;
+const SVG_LOADER = new SVGLoader();
+
+const LOGO_SVGS = {
+  aave: aaveSvg,
+  avax: avaxSvg,
+  ada: adaSvg,
+  atom: atomSvg,
+  bnb: bnbSvg,
+  btc: btcSvg,
+  dai: daiSvg,
+  doge: dogeSvg,
+  eth: ethSvg,
+  link: linkSvg,
+  ltc: ltcSvg,
+  sol: solSvg,
+  uni: uniSvg,
+  usdc: usdcSvg,
+  xmr: xmrSvg,
+  xrp: xrpSvg,
+  antenna: antennaMastSvg,
+  bearClaw: bearClawSvg,
+  bullHorns: bullHornsSvg,
+  candlestick: candlestickSvg,
+  chain: chainLinkSvg,
+  circuit: circuitPanelSvg,
+  diamondGlyph: diamondSvg,
+  gateway: gatewayFrameSvg,
+  hexGrid: hexGridTileSvg,
+  lightning: lightningBoltSvg,
+  pipe: pipeFlangeSvg,
+  radialRing: radialRingSvg,
+  rocketGlyph: rocketGlyphSvg,
+  serverRack: serverRackSvg,
+  skullGlyph: skullGlyphSvg,
+  truss: trussSegmentSvg,
+  vaultDoor: vaultDoorSvg,
+  warning: warningTriangleSvg,
+  whaleTail: whaleTailSvg,
+} as const;
+
+type LogoKey = keyof typeof LOGO_SVGS;
+
+interface AtmospherePalette {
+  nebulaA: number;
+  nebulaB: number;
+  nebulaC: number;
+  starlight: number;
+  accent: number;
+}
+
+type HeroMotif = 'halo' | 'gateway' | 'split' | 'spire' | 'prism';
+
+interface BackgroundArtPreset {
+  name: string;
+  heroMotif: HeroMotif;
+  heroScale: number;
+  heroY: number;
+  pulseBias: number;
+  frameStrength: number;
+  starDensity: number;
+  streakAngle: number;
+}
+
+interface BackgroundArtDirection {
+  name: string;
+  palette: AtmospherePalette;
+  heroMotif: HeroMotif;
+  heroScale: number;
+  heroY: number;
+  pulseBias: number;
+  frameStrength: number;
+  starDensity: number;
+  streakAngle: number;
+}
+
+interface LogoPlacement {
+  key: LogoKey;
+  x: number;
+  y: number;
+  z: number;
+  size: number;
+  rotation?: number;
+  fillOpacity?: number;
+  lineOpacity?: number;
+  glowOpacity?: number;
+  color?: number;
+}
 
 interface BackgroundPulse {
   material: THREE.Material & { opacity: number };
@@ -11,6 +134,8 @@ interface BackgroundPulse {
   amplitude: number;
   speed: number;
   phase: number;
+  moodInfluence: number;
+  eventInfluence: number;
 }
 
 interface BackgroundMover {
@@ -23,6 +148,9 @@ interface BackgroundMover {
   sway: number;
   speed: number;
   phase: number;
+  parallaxFactor: number;
+  moodInfluence: number;
+  eventInfluence: number;
 }
 
 interface BackgroundAnimationState {
@@ -32,27 +160,45 @@ interface BackgroundAnimationState {
   baseGroupX: number;
   baseGroupY: number;
   phase: number;
+  artDirection: BackgroundArtDirection;
+  smoothedMoodPulse: number;
+  smoothedEventPulse: number;
+  smoothedParallaxX: number;
+  smoothedParallaxY: number;
 }
 
-interface AtmospherePalette {
-  nebulaA: number;
-  nebulaB: number;
-  nebulaC: number;
-  starlight: number;
-  accent: number;
+export interface BackgroundRuntimeControls {
+  moodPulse?: number;
+  eventPulse?: number;
+  parallaxX?: number;
+  parallaxY?: number;
+  ballEnergy?: number;
 }
 
 const ATMOSPHERE_PALETTES: AtmospherePalette[] = [
   { nebulaA: 0x0f3946, nebulaB: 0x1d8797, nebulaC: 0x56d9ff, starlight: 0x9dffff, accent: 0x45e6ff },
   { nebulaA: 0x0d311a, nebulaB: 0x1f8f3f, nebulaC: 0x67f39a, starlight: 0xa0ffd2, accent: 0x53ff93 },
-  { nebulaA: 0x36080d, nebulaB: 0x8f1d21, nebulaC: 0xff6767, starlight: 0xffcdc7, accent: 0xff5f4a },
+  { nebulaA: 0x4a1217, nebulaB: 0xb13537, nebulaC: 0xff7a72, starlight: 0xffdfd8, accent: 0xff7662 },
   { nebulaA: 0x2e1a04, nebulaB: 0x956322, nebulaC: 0xffc462, starlight: 0xfff0bf, accent: 0xffc44d },
   { nebulaA: 0x071e35, nebulaB: 0x1f6fa3, nebulaC: 0x74d5ff, starlight: 0xd7f3ff, accent: 0x7ddaff },
-  { nebulaA: 0x2d080f, nebulaB: 0x7b1f2f, nebulaC: 0xff6577, starlight: 0xffc9d5, accent: 0xff5d73 },
+  { nebulaA: 0x43111a, nebulaB: 0xa42d3f, nebulaC: 0xff7684, starlight: 0xffd7dd, accent: 0xff6c7c },
   { nebulaA: 0x261732, nebulaB: 0x6f4aab, nebulaC: 0xe5b75a, starlight: 0xffebbf, accent: 0xf4bf4d },
   { nebulaA: 0x081b3a, nebulaB: 0x1564b8, nebulaC: 0x5fe0ff, starlight: 0xd4f7ff, accent: 0x52d7ff },
-  { nebulaA: 0x300a09, nebulaB: 0xa3311c, nebulaC: 0xff8b52, starlight: 0xffe0c9, accent: 0xff7b42 },
+  { nebulaA: 0x4a1610, nebulaB: 0xc04428, nebulaC: 0xff9d66, starlight: 0xffe8d5, accent: 0xff8c57 },
   { nebulaA: 0x240b3b, nebulaB: 0x7640d1, nebulaC: 0xd38fff, starlight: 0xf4d9ff, accent: 0xc27dff },
+];
+
+const BACKGROUND_ART_PRESETS: BackgroundArtPreset[] = [
+  { name: 'Genesis Structure', heroMotif: 'halo', heroScale: 210, heroY: 20, pulseBias: 0.52, frameStrength: 0.66, starDensity: 0.72, streakAngle: -0.35 },
+  { name: 'Bull Cathedral', heroMotif: 'gateway', heroScale: 220, heroY: 38, pulseBias: 0.64, frameStrength: 0.60, starDensity: 0.58, streakAngle: -0.58 },
+  { name: 'Liquidation Fault', heroMotif: 'split', heroScale: 220, heroY: 16, pulseBias: 0.36, frameStrength: 0.76, starDensity: 0.46, streakAngle: -0.08 },
+  { name: 'Pump Apex', heroMotif: 'spire', heroScale: 205, heroY: 22, pulseBias: 0.62, frameStrength: 0.62, starDensity: 0.56, streakAngle: -0.75 },
+  { name: 'Diamond Vault', heroMotif: 'prism', heroScale: 215, heroY: 28, pulseBias: 0.58, frameStrength: 0.64, starDensity: 0.60, streakAngle: -0.42 },
+  { name: 'Bear Pressure', heroMotif: 'split', heroScale: 225, heroY: 10, pulseBias: 0.34, frameStrength: 0.74, starDensity: 0.42, streakAngle: -0.12 },
+  { name: 'Halving Axis', heroMotif: 'gateway', heroScale: 228, heroY: 24, pulseBias: 0.50, frameStrength: 0.62, starDensity: 0.52, streakAngle: -0.30 },
+  { name: 'DeFi Network', heroMotif: 'prism', heroScale: 212, heroY: 18, pulseBias: 0.56, frameStrength: 0.68, starDensity: 0.58, streakAngle: -0.52 },
+  { name: 'Margin Shock', heroMotif: 'spire', heroScale: 215, heroY: 12, pulseBias: 0.40, frameStrength: 0.78, starDensity: 0.44, streakAngle: -0.02 },
+  { name: 'Flippening Gate', heroMotif: 'halo', heroScale: 240, heroY: 26, pulseBias: 0.70, frameStrength: 0.64, starDensity: 0.56, streakAngle: -0.60 },
 ];
 
 // ── Noise ──
@@ -142,6 +288,294 @@ function buildMesh(positions: number[], color: number, coreOpacity = 0.5, glowOp
   glow.frustumCulled = false;
   group.add(glow);
   return group;
+}
+
+function pushPolyline(positions: number[], points: Array<[number, number]>, z: number, closed = true) {
+  if (points.length < 2) return;
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
+    line(positions, a[0], a[1], z, b[0], b[1], z);
+  }
+  if (closed) {
+    const first = points[0];
+    const last = points[points.length - 1];
+    line(positions, last[0], last[1], z, first[0], first[1], z);
+  }
+}
+
+function addFilledPolygon(group: THREE.Group, points: Array<[number, number]>, z: number, color: number,
+  opacity: number, renderOrder: number, blend: THREE.Blending = THREE.NormalBlending) {
+  if (points.length < 3) return null;
+  const shape = new THREE.Shape();
+  shape.moveTo(points[0][0], points[0][1]);
+  for (let i = 1; i < points.length; i++) {
+    shape.lineTo(points[i][0], points[i][1]);
+  }
+  shape.closePath();
+  const geometry = new THREE.ShapeGeometry(shape);
+  const material = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity,
+    depthWrite: false,
+    depthTest: false,
+    toneMapped: false,
+    blending: blend,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.position.z = z;
+  mesh.renderOrder = renderOrder;
+  mesh.frustumCulled = false;
+  group.add(mesh);
+  return mesh;
+}
+
+function addLayeredSilhouette(group: THREE.Group, points: Array<[number, number]>, z: number, fillColor: number,
+  lineColor: number, fillOpacity: number, lineOpacity: number, glowOpacity: number, renderOrder: number) {
+  const fill = addFilledPolygon(group, points, z, fillColor, fillOpacity, renderOrder);
+  const outlinePos: number[] = [];
+  pushPolyline(outlinePos, points, z + 0.5, true);
+  const outline = buildMesh(outlinePos, lineColor, lineOpacity, glowOpacity);
+  outline.renderOrder = renderOrder + 1;
+  group.add(outline);
+  return { fill, outline };
+}
+
+const logoTemplateCache = new Map<LogoKey, { template: THREE.Group; unitSize: number }>();
+
+function getLogoTemplate(key: LogoKey) {
+  const cached = logoTemplateCache.get(key);
+  if (cached) return cached;
+
+  const data = SVG_LOADER.parse(LOGO_SVGS[key]);
+  const root = new THREE.Group();
+  const outlinePos: number[] = [];
+
+  for (const path of data.paths) {
+    const shapes = SVGLoader.createShapes(path);
+    for (const shape of shapes) {
+      const geometry = new THREE.ShapeGeometry(shape);
+      const fill = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.08,
+        depthWrite: false,
+        depthTest: false,
+        toneMapped: false,
+        side: THREE.DoubleSide,
+      }));
+      fill.userData.logoPart = 'fill';
+      fill.frustumCulled = false;
+      root.add(fill);
+
+      const points = shape.getPoints(56);
+      if (points.length < 2) continue;
+      for (let i = 0; i < points.length - 1; i++) {
+        const a = points[i];
+        const b = points[i + 1];
+        line(outlinePos, a.x, -a.y, 0, b.x, -b.y, 0);
+      }
+      const first = points[0];
+      const last = points[points.length - 1];
+      line(outlinePos, last.x, -last.y, 0, first.x, -first.y, 0);
+    }
+  }
+
+  for (const child of root.children) {
+    if (child instanceof THREE.Mesh) {
+      child.scale.y = -1;
+    }
+  }
+
+  const outline = buildMesh(outlinePos, 0xffffff, 0.28, 0.12);
+  if (outline.children[0] instanceof THREE.LineSegments) outline.children[0].userData.logoPart = 'core';
+  if (outline.children[1] instanceof THREE.LineSegments) outline.children[1].userData.logoPart = 'glow';
+  root.add(outline);
+
+  root.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(root);
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const normalized = new THREE.Group();
+  root.position.set(-center.x, -center.y, 0);
+  normalized.add(root);
+
+  const result = { template: normalized, unitSize: Math.max(size.x, size.y) || 1 };
+  logoTemplateCache.set(key, result);
+  return result;
+}
+
+function buildLogoInstance(placement: LogoPlacement): THREE.Group {
+  const cached = getLogoTemplate(placement.key);
+  const group = cached.template.clone(true);
+  const color = placement.color ?? 0xffffff;
+
+  group.traverse((obj) => {
+    if (obj instanceof THREE.Mesh && obj.material instanceof THREE.MeshBasicMaterial) {
+      obj.material = obj.material.clone();
+      obj.material.color.setHex(color);
+      obj.material.opacity = placement.fillOpacity ?? 0.07;
+    }
+    if (obj instanceof THREE.LineSegments) {
+      const part = obj.userData.logoPart;
+      if (obj.material instanceof THREE.LineBasicMaterial) {
+        obj.material = obj.material.clone();
+        obj.material.color.setHex(color);
+        obj.material.opacity = part === 'glow'
+          ? (placement.glowOpacity ?? 0.09)
+          : (placement.lineOpacity ?? 0.22);
+      }
+    }
+  });
+
+  const scale = placement.size / cached.unitSize;
+  group.scale.setScalar(scale);
+  group.position.set(placement.x, placement.y, placement.z);
+  group.rotation.z = placement.rotation ?? 0;
+  return group;
+}
+
+function addLogoPlacements(group: THREE.Group, placements: LogoPlacement[]) {
+  const placed: THREE.Group[] = [];
+  for (const placement of placements) {
+    const logo = buildLogoInstance(placement);
+    group.add(logo);
+    placed.push(logo);
+  }
+  return placed;
+}
+
+function registerLogoMover(state: BackgroundAnimationState, object: THREE.Object3D, rng: () => number,
+  parallaxFactor: number, drift = 2.5, sway = 0.006, speed = 0.06) {
+  state.movers.push({
+    object,
+    basePosition: object.position.clone(),
+    baseRotationZ: object.rotation.z,
+    driftX: drift,
+    driftY: drift * 0.8,
+    driftZ: drift,
+    sway,
+    speed,
+    phase: rng() * Math.PI * 2,
+    parallaxFactor,
+    moodInfluence: 0.35,
+    eventInfluence: 0.35,
+  });
+}
+
+function addStageMotifComposition(group: THREE.Group, levelIndex: number, art: BackgroundArtDirection, rng: () => number,
+  state: BackgroundAnimationState) {
+  const accent = lerpHex(art.palette.accent, art.palette.starlight, 0.12);
+  const muted = lerpHex(art.palette.starlight, art.palette.nebulaB, 0.34);
+  const shadow = lerpHex(art.palette.nebulaA, 0x040608, 0.58);
+  const placements: LogoPlacement[] = [];
+
+  switch (levelIndex) {
+    case 0:
+      placements.push(
+        { key: 'gateway', x: 0, y: 12, z: -520, size: 500, color: muted, fillOpacity: 0.018, lineOpacity: 0.08, glowOpacity: 0.03 },
+        { key: 'radialRing', x: 0, y: 28, z: -340, size: 280, color: accent, fillOpacity: 0.012, lineOpacity: 0.10, glowOpacity: 0.04 },
+        { key: 'serverRack', x: -184, y: -22, z: -310, size: 118, color: muted, fillOpacity: 0.02, lineOpacity: 0.09, glowOpacity: 0.04 },
+        { key: 'serverRack', x: 184, y: -22, z: -310, size: 118, color: muted, fillOpacity: 0.02, lineOpacity: 0.09, glowOpacity: 0.04 },
+        { key: 'chain', x: -106, y: 176, z: -260, size: 82, color: accent, rotation: -0.2 },
+        { key: 'chain', x: 106, y: 176, z: -260, size: 82, color: accent, rotation: 0.2 },
+      );
+      break;
+    case 1:
+      placements.push(
+        { key: 'bullHorns', x: 0, y: 50, z: -310, size: 340, color: accent, fillOpacity: 0.026, lineOpacity: 0.14, glowOpacity: 0.06 },
+        { key: 'candlestick', x: -184, y: -18, z: -290, size: 120, color: muted },
+        { key: 'candlestick', x: 184, y: -18, z: -290, size: 120, color: muted },
+        { key: 'rocketGlyph', x: -126, y: 150, z: -245, size: 82, color: accent, rotation: -0.28 },
+        { key: 'rocketGlyph', x: 126, y: 150, z: -245, size: 82, color: accent, rotation: 0.28 },
+      );
+      break;
+    case 2:
+      placements.push(
+        { key: 'warning', x: 0, y: 26, z: -330, size: 250, color: accent, fillOpacity: 0.018, lineOpacity: 0.12, glowOpacity: 0.05 },
+        { key: 'lightning', x: -132, y: 168, z: -250, size: 84, color: accent, rotation: -0.18 },
+        { key: 'lightning', x: 132, y: 168, z: -250, size: 84, color: accent, rotation: 0.18 },
+        { key: 'bearClaw', x: -190, y: -20, z: -285, size: 140, color: muted, rotation: -0.08 },
+        { key: 'bearClaw', x: 190, y: -20, z: -285, size: 140, color: muted, rotation: 0.08 },
+      );
+      break;
+    case 3:
+      placements.push(
+        { key: 'rocketGlyph', x: 0, y: 48, z: -340, size: 220, color: accent, fillOpacity: 0.02, lineOpacity: 0.11, glowOpacity: 0.05 },
+        { key: 'candlestick', x: -185, y: -24, z: -300, size: 116, color: muted },
+        { key: 'candlestick', x: 185, y: -24, z: -300, size: 116, color: muted },
+        { key: 'warning', x: 0, y: -120, z: -250, size: 88, color: accent },
+      );
+      break;
+    case 4:
+      placements.push(
+        { key: 'radialRing', x: 0, y: 24, z: -360, size: 336, color: muted, fillOpacity: 0.01, lineOpacity: 0.08, glowOpacity: 0.03 },
+        { key: 'diamondGlyph', x: 0, y: 28, z: -250, size: 360, color: accent, fillOpacity: 0.03, lineOpacity: 0.18, glowOpacity: 0.08 },
+        { key: 'hexGrid', x: -174, y: 48, z: -300, size: 104, color: muted },
+        { key: 'hexGrid', x: 174, y: 48, z: -300, size: 104, color: muted },
+      );
+      break;
+    case 5:
+      placements.push(
+        { key: 'skullGlyph', x: 0, y: 20, z: -280, size: 260, color: accent, fillOpacity: 0.024, lineOpacity: 0.13, glowOpacity: 0.06 },
+        { key: 'bearClaw', x: -180, y: 110, z: -270, size: 138, color: muted, rotation: -0.16 },
+        { key: 'bearClaw', x: 180, y: 110, z: -270, size: 138, color: muted, rotation: 0.16 },
+        { key: 'warning', x: 0, y: -116, z: -250, size: 96, color: accent },
+      );
+      break;
+    case 6:
+      placements.push(
+        { key: 'gateway', x: 0, y: 14, z: -430, size: 420, color: muted, fillOpacity: 0.018, lineOpacity: 0.08, glowOpacity: 0.03 },
+        { key: 'chain', x: 0, y: -90, z: -280, size: 122, color: accent, rotation: Math.PI / 2 },
+        { key: 'radialRing', x: -220, y: 34, z: -280, size: 126, color: 0xc4a5ff, fillOpacity: 0.01, lineOpacity: 0.08, glowOpacity: 0.03 },
+        { key: 'radialRing', x: 220, y: 34, z: -280, size: 126, color: 0xe2b956, fillOpacity: 0.01, lineOpacity: 0.08, glowOpacity: 0.03 },
+      );
+      break;
+    case 7:
+      placements.push(
+        { key: 'circuit', x: 0, y: 16, z: -300, size: 320, color: accent, fillOpacity: 0.018, lineOpacity: 0.12, glowOpacity: 0.05 },
+        { key: 'serverRack', x: -190, y: 18, z: -300, size: 124, color: muted },
+        { key: 'serverRack', x: 190, y: 18, z: -300, size: 124, color: muted },
+        { key: 'hexGrid', x: -96, y: 170, z: -250, size: 92, color: accent },
+        { key: 'hexGrid', x: 96, y: 170, z: -250, size: 92, color: accent },
+      );
+      break;
+    case 8:
+      placements.push(
+        { key: 'vaultDoor', x: 0, y: 10, z: -390, size: 270, color: muted, fillOpacity: 0.02, lineOpacity: 0.10, glowOpacity: 0.04 },
+        { key: 'warning', x: 0, y: 28, z: -300, size: 150, color: accent, fillOpacity: 0.012, lineOpacity: 0.10, glowOpacity: 0.04 },
+        { key: 'lightning', x: -134, y: 160, z: -250, size: 82, color: accent, rotation: -0.1 },
+        { key: 'lightning', x: 134, y: 160, z: -250, size: 82, color: accent, rotation: 0.1 },
+      );
+      break;
+    case 9:
+      placements.push(
+        { key: 'gateway', x: 0, y: 18, z: -430, size: 430, color: muted, fillOpacity: 0.018, lineOpacity: 0.08, glowOpacity: 0.03 },
+        { key: 'radialRing', x: 0, y: 26, z: -280, size: 290, color: accent, fillOpacity: 0.014, lineOpacity: 0.12, glowOpacity: 0.05 },
+        { key: 'truss', x: -176, y: -28, z: -285, size: 132, color: muted, rotation: Math.PI / 2 },
+        { key: 'truss', x: 176, y: -28, z: -285, size: 132, color: muted, rotation: Math.PI / 2 },
+      );
+      break;
+    default:
+      break;
+  }
+
+  const placed = addLogoPlacements(group, placements);
+  for (const logo of placed) {
+    const isHero = Math.abs(logo.position.x) < 30 && logo.scale.x > 0.3;
+    registerLogoMover(state, logo, rng, isHero ? 0.58 : 0.42, isHero ? 2.2 : 1.6, isHero ? 0.008 : 0.005, isHero ? 0.05 : 0.06);
+  }
+
+  if (levelIndex === 0 || levelIndex === 6 || levelIndex === 9) {
+    const chainRow = addLogoPlacements(group, [
+      { key: 'chain', x: -64, y: -118, z: -240, size: 62, color: shadow, rotation: 0.22, fillOpacity: 0.015, lineOpacity: 0.08, glowOpacity: 0.02 },
+      { key: 'chain', x: 0, y: -118, z: -240, size: 62, color: shadow, fillOpacity: 0.015, lineOpacity: 0.08, glowOpacity: 0.02 },
+      { key: 'chain', x: 64, y: -118, z: -240, size: 62, color: shadow, rotation: -0.22, fillOpacity: 0.015, lineOpacity: 0.08, glowOpacity: 0.02 },
+    ]);
+    for (const logo of chainRow) registerLogoMover(state, logo, rng, 0.34, 1.2, 0.003, 0.05);
+  }
 }
 
 // ── Cave profile ──
@@ -1086,7 +1520,7 @@ const DEFAULTS: CaveConfig = {
   color: 0x00ff88, seed: 42, centerY: 40, baseRadius: 500,
   depthLayers: 8, depthSpacing: 70, samples: 60, jaggedness: 1.0,
   connectStride: 4, stalactiteDensity: 0.25, rockDetailDensity: 0.2,
-  coreOpacity: 0.45, glowOpacity: 0.22, depthFade: 0.09,
+  coreOpacity: 0.32, glowOpacity: 0.14, depthFade: 0.13,
 };
 
 const CAVE_X_MIN = -HW - 120;
@@ -1108,9 +1542,10 @@ function buildCave(group: THREE.Group, cfg: Partial<CaveConfig>) {
   buildCaveLayer(frontPos, profiles[0], 0);
   buildStalactites(frontPos, profiles[0], 0, c.seed + 5000, c.stalactiteDensity, 10, 35);
   buildRockDetail(frontPos, profiles[0], 0, CAVE_CEIL, CAVE_FLOOR, c.seed + 6000, c.rockDetailDensity);
-  group.add(buildMesh(frontPos, c.color, c.coreOpacity, c.glowOpacity));
+  group.add(buildMesh(frontPos, c.color, c.coreOpacity * 0.72, c.glowOpacity * 0.62));
 
   for (let layer = 1; layer < c.depthLayers; layer++) {
+    if (layer > 2 && layer % 2 !== 0) continue;
     const z = -layer * c.depthSpacing;
     const fade = 1 - layer * c.depthFade;
     const layerOpacity = Math.max(0.08, c.coreOpacity * fade);
@@ -1160,110 +1595,66 @@ function buildLevel0(group: THREE.Group) {
   const btcPos: number[] = [];
   buildGiantBitcoin(btcPos, 0, 20, -150, 180);
   group.add(buildMesh(btcPos, 0x44eeff, 0.50, 0.28));
+  addLogoPlacements(group, [
+    { key: 'btc', x: 0, y: 26, z: -190, size: 210, color: 0x66f4ff, fillOpacity: 0.045, lineOpacity: 0.18, glowOpacity: 0.10 },
+  ]);
 
   // Floating blockchain blocks at various depths
   const blockPos: number[] = [];
   buildBlockchainBlocks(blockPos, 100, 16, 800, 600, -60, -350, 35);
   group.add(buildMesh(blockPos, 0x22ccdd, 0.43, 0.24));
 
-  // Hash stream (genesis block data)
-  const hashPos: number[] = [];
-  buildHashStream(hashPos, 103, -350, 350, -100, -250, 4);
-  group.add(buildMesh(hashPos, 0x1199aa, 0.29, 0.14));
-
-  // Data rain in the background
-  const rainPos: number[] = [];
-  buildDataRain(rainPos, 101, 35, 900, 380, -380, -200);
-  group.add(buildMesh(rainPos, 0x22bbcc, 0.25, 0.12));
-
-  // Scatter bitcoin symbols (larger)
-  const symPos: number[] = [];
-  const rng = seededRandom(102);
-  for (let i = 0; i < 6; i++) {
-    bitcoinSymbol(symPos, (rng() - 0.5) * 700, (rng() - 0.5) * 450, -80 - rng() * 200, 22 + rng() * 20);
-  }
-  group.add(buildMesh(symPos, 0x55eeff, 0.36, 0.18));
+  addLogoPlacements(group, [
+    { key: 'btc', x: -166, y: 176, z: -300, size: 70, color: 0x4ceaff },
+    { key: 'usdc', x: 166, y: 160, z: -300, size: 64, color: 0x58efff },
+  ]);
 }
 
 /** Level 1: Bull Trap — giant bull horns, pump chart with volume, rocket trails */
 function buildLevel1(group: THREE.Group) {
   buildCave(group, {
     color: 0x11aa44, accentColor: 0x44ff88, seed: 200, centerY: 60,
-    baseRadius: 530, jaggedness: 0.6, depthLayers: 7, depthSpacing: 75,
-    stalactiteDensity: 0.15, rockDetailDensity: 0.12, connectStride: 4,
-    coreOpacity: 0.40, glowOpacity: 0.18, depthFade: 0.07,
+    baseRadius: 520, jaggedness: 0.45, depthLayers: 5, depthSpacing: 90,
+    stalactiteDensity: 0.08, rockDetailDensity: 0.05, connectStride: 6,
+    samples: 54, coreOpacity: 0.28, glowOpacity: 0.12, depthFade: 0.11,
   });
 
-  // Giant bull horns centerpiece (bigger)
+  // Keep one bold centerpiece and one market signal. Avoid stacked line systems.
   const hornPos: number[] = [];
   buildBullHorns(hornPos, 0, 10, -140, 200);
-  group.add(buildMesh(hornPos, 0x44ff88, 0.54, 0.28));
+  group.add(buildMesh(hornPos, 0x44ff88, 0.58, 0.30));
 
-  // Smaller bull horns scattered
-  const horn2Pos: number[] = [];
-  buildBullHorns(horn2Pos, -280, 80, -280, 85);
-  buildBullHorns(horn2Pos, 300, -30, -250, 70);
-  group.add(buildMesh(horn2Pos, 0x22cc66, 0.32, 0.16));
-
-  // Massive rising chart with volume bars
   const chartPos: number[] = [];
-  buildGiantChart(chartPos, 201, -400, 400, -30, 250, -200, 30);
-  group.add(buildMesh(chartPos, 0x00ff44, 0.36, 0.18));
+  buildGiantChart(chartPos, 201, -320, 320, -10, 210, -210, 12);
+  group.add(buildMesh(chartPos, 0x27ff6d, 0.24, 0.10));
 
-  // Volume bars underneath chart
-  const volPos: number[] = [];
-  buildVolumeBars(volPos, 204, -400, 400, -250, -200, 30, 80);
-  group.add(buildMesh(volPos, 0x22cc66, 0.25, 0.12));
-
-  // Rocket trails (things going up!)
-  const rocketPos: number[] = [];
-  buildRocketTrails(rocketPos, 202, 4, 700, -220, -300);
-  group.add(buildMesh(rocketPos, 0x88ffaa, 0.29, 0.14));
-
-  // Order book in corner
-  const obPos: number[] = [];
-  buildOrderBook(obPos, 203, -250, 60, -320, 120, 8);
-  group.add(buildMesh(obPos, 0x33dd77, 0.22, 0.10));
+  addLogoPlacements(group, [
+    { key: 'doge', x: -150, y: 170, z: -260, size: 74, color: 0x8bffad },
+    { key: 'sol', x: 158, y: 138, z: -290, size: 76, color: 0x65ff9f, rotation: -0.04 },
+  ]);
 }
 
 /** Level 2: Liquidation Cascade — lightning, crashing chart, order book collapse, hash chaos */
 function buildLevel2(group: THREE.Group) {
   buildCave(group, {
     color: 0x882233, accentColor: 0xcc3344, seed: 300, centerY: 30,
-    baseRadius: 450, jaggedness: 1.8, depthLayers: 12, depthSpacing: 42,
-    connectStride: 2, stalactiteDensity: 0.55, rockDetailDensity: 0.45,
-    samples: 80, coreOpacity: 0.42, glowOpacity: 0.18, depthFade: 0.07,
+    baseRadius: 440, jaggedness: 1.4, depthLayers: 8, depthSpacing: 56,
+    connectStride: 3, stalactiteDensity: 0.24, rockDetailDensity: 0.16,
+    samples: 64, coreOpacity: 0.30, glowOpacity: 0.12, depthFade: 0.12,
   });
 
-  // Lightning bolts (liquidation strikes!) — more and closer
   const boltPos: number[] = [];
-  buildLightningBolts(boltPos, 300, 12, 800, 380, -380, -80);
-  group.add(buildMesh(boltPos, 0xff4444, 0.54, 0.28));
+  buildLightningBolts(boltPos, 300, 5, 620, 310, -310, -90);
+  group.add(buildMesh(boltPos, 0xff5a58, 0.42, 0.20));
 
-  // More lightning deeper
   const bolt2Pos: number[] = [];
-  buildLightningBolts(bolt2Pos, 301, 6, 600, 300, -300, -220);
-  group.add(buildMesh(bolt2Pos, 0xcc2233, 0.32, 0.16));
+  buildLightningBolts(bolt2Pos, 301, 2, 420, 240, -240, -220);
+  group.add(buildMesh(bolt2Pos, 0xd13b43, 0.20, 0.08));
 
-  // Massive waterfall staircase chart
   const stairPos: number[] = [];
-  buildStaircaseChart(stairPos, 302, -380, 380, 260, -150, 10);
-  group.add(buildMesh(stairPos, 0xff6644, 0.40, 0.20));
+  buildStaircaseChart(stairPos, 302, -300, 300, 220, -120, 7);
+  group.add(buildMesh(stairPos, 0xff7a5a, 0.28, 0.12));
 
-  // Order book (collapsing)
-  const obPos: number[] = [];
-  buildOrderBook(obPos, 305, 200, 30, -280, 140, 10);
-  group.add(buildMesh(obPos, 0xff4433, 0.29, 0.14));
-
-  // Warning patterns scattered — more prominent
-  const warnPos: number[] = [];
-  buildWarningPatterns(warnPos, 303, 12, 700, 500, -180);
-  group.add(buildMesh(warnPos, 0xff3333, 0.40, 0.20));
-
-  // Data rain (falling prices) — denser
-  const rainPos: number[] = [];
-  buildDataRain(rainPos, 304, 50, 800, 350, -350, -120);
-  group.add(buildMesh(rainPos, 0xcc3344, 0.25, 0.12));
 }
 
 /** Level 3: Pump & Dump — rockets, giant chart with volume, dollar signs, order book */
@@ -1275,11 +1666,6 @@ function buildLevel3(group: THREE.Group) {
     coreOpacity: 0.40, glowOpacity: 0.18, depthFade: 0.07,
   });
 
-  // Massive rocket trails (pump phase) — bigger
-  const rocketPos: number[] = [];
-  buildRocketTrails(rocketPos, 400, 6, 800, -220, -140);
-  group.add(buildMesh(rocketPos, 0xffcc44, 0.47, 0.24));
-
   // Giant candlestick chart
   const chartPos: number[] = [];
   buildGiantChart(chartPos, 401, -420, 420, 20, 280, -200, 22);
@@ -1290,23 +1676,11 @@ function buildLevel3(group: THREE.Group) {
   buildVolumeBars(volPos, 405, -420, 420, -200, -200, 22, 90);
   group.add(buildMesh(volPos, 0xcc8822, 0.29, 0.14));
 
-  // Giant dollar sign
-  const dollarPos: number[] = [];
-  buildGiantDollar(dollarPos, -200, 40, -280, 120);
-  group.add(buildMesh(dollarPos, 0xffcc44, 0.36, 0.18));
-
-  // Dollar signs scattered (larger)
-  const symPos: number[] = [];
-  const rng = seededRandom(402);
-  for (let i = 0; i < 8; i++) {
-    dollarSymbol(symPos, (rng() - 0.5) * 700, (rng() - 0.5) * 500, -60 - rng() * 250, 24 + rng() * 22);
-  }
-  group.add(buildMesh(symPos, 0xffaa00, 0.32, 0.16));
-
-  // Order book
-  const obPos: number[] = [];
-  buildOrderBook(obPos, 403, 220, -40, -320, 130, 9);
-  group.add(buildMesh(obPos, 0xddaa33, 0.22, 0.10));
+  addLogoPlacements(group, [
+    { key: 'doge', x: -160, y: 176, z: -260, size: 70, color: 0xffcb62 },
+    { key: 'sol', x: 164, y: 158, z: -280, size: 68, color: 0xffdd6a },
+    { key: 'avax', x: 0, y: -124, z: -300, size: 76, color: 0xffce5a },
+  ]);
 }
 
 /** Level 4: Diamond Formation — massive ETH diamond, crystals, liquidity pools */
@@ -1318,39 +1692,11 @@ function buildLevel4(group: THREE.Group) {
     samples: 85, coreOpacity: 0.40, glowOpacity: 0.18, depthFade: 0.07,
   });
 
-  // Massive Ethereum diamond centerpiece
-  const ethPos: number[] = [];
-  buildGiantEth(ethPos, 0, 20, -130, 190);
-  group.add(buildMesh(ethPos, 0x66ccff, 0.54, 0.28));
-
-  // Crystal formations throughout (more, bigger)
-  const crystalPos: number[] = [];
-  buildCrystals(crystalPos, 500, 25, 900, 650, -40, -350, [30, 80]);
-  group.add(buildMesh(crystalPos, 0x44bbff, 0.40, 0.20));
-
-  // Liquidity pools
-  const poolPos: number[] = [];
-  buildLiquidityPool(poolPos, -250, 50, -220, 80, 5);
-  buildLiquidityPool(poolPos, 280, -40, -260, 65, 4);
-  group.add(buildMesh(poolPos, 0x55ddff, 0.36, 0.18));
-
-  // Wallet/key shape
-  const keyPos: number[] = [];
-  buildWalletKey(keyPos, 200, 100, -350, 100);
-  group.add(buildMesh(keyPos, 0x3399dd, 0.25, 0.12));
-
-  // Scatter eth symbols (larger)
-  const symPos: number[] = [];
-  const rng = seededRandom(502);
-  for (let i = 0; i < 8; i++) {
-    ethSymbol(symPos, (rng() - 0.5) * 700, (rng() - 0.5) * 500, -80 - rng() * 200, 20 + rng() * 18);
-  }
-  group.add(buildMesh(symPos, 0x55ccff, 0.32, 0.16));
-
-  // Hash stream (smart contracts)
-  const hashPos: number[] = [];
-  buildHashStream(hashPos, 503, -300, 300, -120, -300, 3);
-  group.add(buildMesh(hashPos, 0x2288cc, 0.22, 0.10));
+  addLogoPlacements(group, [
+    { key: 'diamondGlyph', x: 0, y: 18, z: -170, size: 252, color: 0x8ce0ff, fillOpacity: 0.06, lineOpacity: 0.22, glowOpacity: 0.12 },
+    { key: 'eth', x: -164, y: 166, z: -260, size: 68, color: 0x79ccff },
+    { key: 'link', x: 172, y: 152, z: -285, size: 62, color: 0x57c7ff },
+  ]);
 }
 
 /** Level 5: Bear Market — massive claw marks, crashing chart, skulls, collapsed order book */
@@ -1367,36 +1713,10 @@ function buildLevel5(group: THREE.Group) {
   buildClawMarks(clawPos, 600, 14, 800, 550, -100);
   group.add(buildMesh(clawPos, 0xff3344, 0.58, 0.30));
 
-  // More claws deeper
-  const claw2Pos: number[] = [];
-  buildClawMarks(claw2Pos, 601, 8, 700, 450, -250);
-  group.add(buildMesh(claw2Pos, 0xcc2233, 0.32, 0.16));
-
-  // Massive descending staircase chart
-  const stairPos: number[] = [];
-  buildStaircaseChart(stairPos, 602, -400, 400, 280, -140, 12);
-  group.add(buildMesh(stairPos, 0xff4455, 0.43, 0.22));
-
-  // Collapsed order book
-  const obPos: number[] = [];
-  buildOrderBook(obPos, 604, -200, -20, -250, 130, 10);
-  group.add(buildMesh(obPos, 0xcc3344, 0.29, 0.14));
-
-  // Warning symbols — more
-  const warnPos: number[] = [];
-  buildWarningPatterns(warnPos, 603, 10, 600, 450, -200);
-  group.add(buildMesh(warnPos, 0xff4455, 0.32, 0.16));
-
   // Giant skull centerpiece
   const skullPos: number[] = [];
   buildSkull(skullPos, 0, 30, -160, 90);
   group.add(buildMesh(skullPos, 0xff3344, 0.40, 0.20));
-
-  // Smaller skulls scattered
-  const skull2Pos: number[] = [];
-  buildSkull(skull2Pos, -250, 60, -300, 50);
-  buildSkull(skull2Pos, 270, -30, -320, 45);
-  group.add(buildMesh(skull2Pos, 0x993344, 0.25, 0.12));
 }
 
 /** Level 6: The Halving — giant BTC symbol split, halving blocks, hash streams */
@@ -1428,26 +1748,22 @@ function buildLevel6(group: THREE.Group) {
   const btcPos: number[] = [];
   buildGiantBitcoin(btcPos, -220, 30, -220, 120);
   group.add(buildMesh(btcPos, 0xaa88ff, 0.40, 0.20));
+  addLogoPlacements(group, [
+    { key: 'btc', x: -220, y: 30, z: -246, size: 122, color: 0xc4a5ff, fillOpacity: 0.04, lineOpacity: 0.16, glowOpacity: 0.09 },
+  ]);
 
   // Giant ETH on right
   const ethPos: number[] = [];
   buildGiantEth(ethPos, 220, 30, -220, 110);
   group.add(buildMesh(ethPos, 0xddaa44, 0.40, 0.20));
+  addLogoPlacements(group, [
+    { key: 'eth', x: 220, y: 28, z: -246, size: 118, color: 0xe2b956, fillOpacity: 0.04, lineOpacity: 0.16, glowOpacity: 0.09 },
+  ]);
 
-  // Hash streams (mining computation)
-  const hashPos: number[] = [];
-  buildHashStream(hashPos, 702, -350, -50, 100, -300, 3);
-  buildHashStream(hashPos, 703, 50, 350, 100, -300, 3);
-  group.add(buildMesh(hashPos, 0x8866cc, 0.25, 0.12));
-
-  // Scattered symbols
-  const symPos: number[] = [];
-  const rng = seededRandom(701);
-  for (let i = 0; i < 5; i++) {
-    bitcoinSymbol(symPos, -150 - rng() * 200, (rng() - 0.5) * 400, -100 - rng() * 180, 24 + rng() * 16);
-    ethSymbol(symPos, 150 + rng() * 200, (rng() - 0.5) * 400, -100 - rng() * 180, 22 + rng() * 16);
-  }
-  group.add(buildMesh(symPos, 0xbb99dd, 0.29, 0.14));
+  addLogoPlacements(group, [
+    { key: 'btc', x: -166, y: 188, z: -300, size: 64, color: 0xd5b4ff },
+    { key: 'eth', x: 158, y: 182, z: -300, size: 62, color: 0xf0c36a },
+  ]);
 }
 
 /** Level 7: DeFi Maze — circuit boards, network nodes, liquidity pools, hash streams */
@@ -1459,42 +1775,15 @@ function buildLevel7(group: THREE.Group) {
     samples: 90, coreOpacity: 0.40, glowOpacity: 0.18, depthFade: 0.07,
   });
 
-  // Circuit board traces — denser, closer
-  const circPos: number[] = [];
-  buildCircuitTraces(circPos, 800, 25, 800, 550, -100);
-  group.add(buildMesh(circPos, 0x33aaff, 0.47, 0.24));
-
-  const circ2Pos: number[] = [];
-  buildCircuitTraces(circ2Pos, 801, 15, 650, 450, -250);
-  group.add(buildMesh(circ2Pos, 0x2266cc, 0.29, 0.14));
-
   // Network graph (DeFi protocol connections) — more nodes
   const netPos: number[] = [];
   buildNetworkGraph(netPos, 802, 35, 800, 550, -180, 160);
   group.add(buildMesh(netPos, 0x44ccff, 0.40, 0.20));
-
-  // Liquidity pools
-  const poolPos: number[] = [];
-  buildLiquidityPool(poolPos, -200, 60, -160, 90, 6);
-  buildLiquidityPool(poolPos, 230, -40, -200, 75, 5);
-  buildLiquidityPool(poolPos, 0, -80, -300, 60, 4);
-  group.add(buildMesh(poolPos, 0x55ddff, 0.36, 0.18));
-
-  // Hash streams (smart contracts executing)
-  const hashPos: number[] = [];
-  buildHashStream(hashPos, 804, -380, 380, -60, -280, 4);
-  group.add(buildMesh(hashPos, 0x2288dd, 0.25, 0.12));
-
-  // Data streams
-  const dataPos: number[] = [];
-  buildDataRain(dataPos, 803, 45, 800, 350, -350, -140);
-  group.add(buildMesh(dataPos, 0x1155ee, 0.25, 0.12));
-
-  // Wallet keys (access to protocols)
-  const keyPos: number[] = [];
-  buildWalletKey(keyPos, -280, -60, -350, 80);
-  buildWalletKey(keyPos, 300, 100, -380, 70);
-  group.add(buildMesh(keyPos, 0x3388cc, 0.22, 0.10));
+  addLogoPlacements(group, [
+    { key: 'uni', x: -160, y: 170, z: -260, size: 78, color: 0x63c6ff },
+    { key: 'aave', x: 166, y: 166, z: -280, size: 76, color: 0x6cd8ff },
+    { key: 'link', x: 0, y: -126, z: -300, size: 64, color: 0x74d8ff },
+  ]);
 }
 
 /** Level 8: Margin Call — massive skull, warnings, lightning, order book collapse, hash chaos */
@@ -1511,43 +1800,10 @@ function buildLevel8(group: THREE.Group) {
   buildSkull(skullPos, 0, 30, -120, 140);
   group.add(buildMesh(skullPos, 0xff4422, 0.58, 0.30));
 
-  // Smaller skulls scattered
-  const skull2Pos: number[] = [];
-  buildSkull(skull2Pos, -280, 60, -240, 55);
-  buildSkull(skull2Pos, 300, -20, -280, 50);
-  buildSkull(skull2Pos, -120, -90, -340, 35);
-  buildSkull(skull2Pos, 150, 100, -360, 30);
-  group.add(buildMesh(skull2Pos, 0xcc3311, 0.32, 0.16));
-
-  // Warning patterns everywhere — max chaos
-  const warnPos: number[] = [];
-  buildWarningPatterns(warnPos, 901, 20, 800, 550, -150);
-  group.add(buildMesh(warnPos, 0xff6633, 0.43, 0.22));
-
   // Lightning (margin liquidation) — intense
   const boltPos: number[] = [];
   buildLightningBolts(boltPos, 902, 10, 700, 350, -350, -180);
   group.add(buildMesh(boltPos, 0xff8844, 0.43, 0.22));
-
-  // Crashed order book
-  const obPos: number[] = [];
-  buildOrderBook(obPos, 905, -250, -40, -260, 120, 8);
-  group.add(buildMesh(obPos, 0xdd4422, 0.29, 0.14));
-
-  // Staircase chart (cascading liquidations)
-  const stairPos: number[] = [];
-  buildStaircaseChart(stairPos, 903, -350, 350, 240, -200, 9);
-  group.add(buildMesh(stairPos, 0xdd4422, 0.32, 0.16));
-
-  // Hash stream (transaction chaos)
-  const hashPos: number[] = [];
-  buildHashStream(hashPos, 906, -350, 350, 80, -300, 3);
-  group.add(buildMesh(hashPos, 0xaa3311, 0.22, 0.10));
-
-  // Claw marks
-  const clawPos: number[] = [];
-  buildClawMarks(clawPos, 904, 8, 600, 450, -280);
-  group.add(buildMesh(clawPos, 0xff3322, 0.25, 0.12));
 }
 
 /** Level 9: The Flippening — massive dollar, BTC vs ETH, crossover, everything converges */
@@ -1573,45 +1829,342 @@ function buildLevel9(group: THREE.Group) {
   const ethPos: number[] = [];
   buildGiantEth(ethPos, 240, 40, -240, 120);
   group.add(buildMesh(ethPos, 0x66bbff, 0.40, 0.20));
+  addLogoPlacements(group, [
+    { key: 'eth', x: 240, y: 38, z: -268, size: 128, color: 0x95ccff, fillOpacity: 0.04, lineOpacity: 0.16, glowOpacity: 0.09 },
+  ]);
 
   // Giant BTC symbol on left
   const btcPos: number[] = [];
   buildGiantBitcoin(btcPos, -240, 40, -240, 110);
   group.add(buildMesh(btcPos, 0xffaa44, 0.40, 0.20));
+  addLogoPlacements(group, [
+    { key: 'btc', x: -240, y: 38, z: -268, size: 118, color: 0xffbf66, fillOpacity: 0.04, lineOpacity: 0.16, glowOpacity: 0.09 },
+  ]);
 
-  // Blockchain blocks (bigger, more)
-  const blockPos: number[] = [];
-  buildBlockchainBlocks(blockPos, 1001, 14, 700, 500, -80, -350, 30);
-  group.add(buildMesh(blockPos, 0x8855cc, 0.32, 0.16));
-
-  // Liquidity pools (DeFi finale)
-  const poolPos: number[] = [];
-  buildLiquidityPool(poolPos, -150, -60, -280, 70, 5);
-  buildLiquidityPool(poolPos, 180, -80, -310, 60, 4);
-  group.add(buildMesh(poolPos, 0xaa77ee, 0.29, 0.14));
-
-  // Hash streams (all chains computing)
-  const hashPos: number[] = [];
-  buildHashStream(hashPos, 1004, -380, 380, -80, -300, 4);
-  group.add(buildMesh(hashPos, 0x7744cc, 0.25, 0.12));
-
-  // Volume bars (final volume explosion)
-  const volPos: number[] = [];
-  buildVolumeBars(volPos, 1005, -400, 400, -220, -200, 25, 100);
-  group.add(buildMesh(volPos, 0x9955dd, 0.25, 0.12));
-
-  // Crystal formations (new era crystallizing)
-  const crystPos: number[] = [];
-  buildCrystals(crystPos, 1003, 12, 800, 550, -100, -320, [25, 60]);
-  group.add(buildMesh(crystPos, 0xbb88ff, 0.25, 0.12));
-
-  // Concentric rings (power emanating)
-  const ringPos: number[] = [];
-  buildConcentricRings(ringPos, 0, 20, -350, 8, 200, 10);
-  group.add(buildMesh(ringPos, 0x7744bb, 0.18, 0.08));
+  addLogoPlacements(group, [
+    { key: 'sol', x: 0, y: 176, z: -260, size: 82, color: 0xc28fff },
+    { key: 'uni', x: -164, y: -92, z: -250, size: 70, color: 0xd396ff },
+    { key: 'aave', x: 168, y: -92, z: -250, size: 70, color: 0xba85ff },
+  ]);
 }
 
-function makeNebulaTexture(seed: number, palette: AtmospherePalette): THREE.Texture {
+function buildTowerPoints(cx: number, baseY: number, topY: number, baseWidth: number, topWidth: number,
+  lean = 0, crown = 0): Array<[number, number]> {
+  const halfBase = baseWidth / 2;
+  const halfTop = topWidth / 2;
+  const topCx = cx + lean;
+  return [
+    [cx - halfBase, baseY],
+    [cx - halfBase * 0.86, baseY + crown],
+    [topCx - halfTop, topY],
+    [topCx + halfTop, topY],
+    [cx + halfBase * 0.86, baseY + crown],
+    [cx + halfBase, baseY],
+  ];
+}
+
+function addLightCone(group: THREE.Group, x: number, topY: number, bottomY: number, topWidth: number,
+  bottomWidth: number, z: number, color: number, opacity: number, renderOrder: number,
+  state: BackgroundAnimationState, rng: () => number, parallaxFactor: number) {
+  const points: Array<[number, number]> = [
+    [x - topWidth / 2, topY],
+    [x + topWidth / 2, topY],
+    [x + bottomWidth / 2, bottomY],
+    [x - bottomWidth / 2, bottomY],
+  ];
+  const mesh = addFilledPolygon(group, points, z, color, opacity, renderOrder, THREE.AdditiveBlending);
+  if (!mesh) return;
+  state.movers.push({
+    object: mesh,
+    basePosition: mesh.position.clone(),
+    baseRotationZ: mesh.rotation.z,
+    driftX: 2,
+    driftY: 5,
+    driftZ: 4,
+    sway: 0.004,
+    speed: 0.06,
+    phase: rng() * Math.PI * 2,
+    parallaxFactor,
+    moodInfluence: 0.45,
+    eventInfluence: 0.8,
+  });
+  const mat = mesh.material;
+  if (hasOpacity(mat)) {
+    state.pulses.push({
+      material: mat,
+      baseOpacity: mat.opacity,
+      amplitude: 0.08,
+      speed: 0.18,
+      phase: rng() * Math.PI * 2,
+      moodInfluence: 0.8,
+      eventInfluence: 1.0,
+    });
+  }
+}
+
+function addArchitecturalMasses(group: THREE.Group, art: BackgroundArtDirection, rng: () => number, state: BackgroundAnimationState) {
+  const shadowColor = lerpHex(art.palette.nebulaA, 0x020305, 0.82);
+  const rimColor = lerpHex(art.palette.accent, art.palette.starlight, 0.18);
+  const deckColor = lerpHex(art.palette.nebulaB, 0x030507, 0.76);
+  const horizonY = -140 + art.heroY * 0.18;
+  const floorY = -HH - 34;
+
+  const farDeck = addFilledPolygon(group, [
+    [-HW - 120, floorY],
+    [HW + 120, floorY],
+    [HW + 90, horizonY - 30],
+    [-HW - 90, horizonY - 30],
+  ], -900, deckColor, 0.26, -20);
+  if (farDeck) {
+    state.movers.push({
+      object: farDeck,
+      basePosition: farDeck.position.clone(),
+      baseRotationZ: farDeck.rotation.z,
+      driftX: 2,
+      driftY: 2,
+      driftZ: 4,
+      sway: 0.002,
+      speed: 0.04,
+      phase: rng() * Math.PI * 2,
+      parallaxFactor: 0.14,
+      moodInfluence: 0.2,
+      eventInfluence: 0.2,
+    });
+  }
+
+  const towerConfigs: Array<{ x: number; topY: number; baseWidth: number; topWidth: number; z: number; lean?: number; crown?: number; fillOpacity: number; lineOpacity: number; glowOpacity: number; parallax: number }> = [];
+  const deckLines: Array<{ x1: number; x2: number; y: number; z: number }> = [];
+
+  switch (art.heroMotif) {
+    case 'halo':
+      towerConfigs.push(
+        { x: -170, topY: 250, baseWidth: 130, topWidth: 90, z: -610, lean: -14, crown: 14, fillOpacity: 0.24, lineOpacity: 0.12, glowOpacity: 0.05, parallax: 0.2 },
+        { x: 170, topY: 250, baseWidth: 130, topWidth: 90, z: -610, lean: 14, crown: 14, fillOpacity: 0.24, lineOpacity: 0.12, glowOpacity: 0.05, parallax: 0.2 },
+        { x: -220, topY: 110, baseWidth: 92, topWidth: 54, z: -420, lean: -8, crown: 8, fillOpacity: 0.32, lineOpacity: 0.16, glowOpacity: 0.06, parallax: 0.34 },
+        { x: 220, topY: 110, baseWidth: 92, topWidth: 54, z: -420, lean: 8, crown: 8, fillOpacity: 0.32, lineOpacity: 0.16, glowOpacity: 0.06, parallax: 0.34 },
+      );
+      deckLines.push(
+        { x1: -190, x2: 190, y: 18, z: -520 },
+        { x1: -240, x2: -110, y: -46, z: -340 },
+        { x1: 110, x2: 240, y: -46, z: -340 },
+      );
+      break;
+    case 'gateway':
+      towerConfigs.push(
+        { x: -180, topY: 300, baseWidth: 140, topWidth: 78, z: -560, lean: -24, crown: 16, fillOpacity: 0.26, lineOpacity: 0.13, glowOpacity: 0.05, parallax: 0.22 },
+        { x: 180, topY: 300, baseWidth: 140, topWidth: 78, z: -560, lean: 24, crown: 16, fillOpacity: 0.26, lineOpacity: 0.13, glowOpacity: 0.05, parallax: 0.22 },
+        { x: -245, topY: 120, baseWidth: 100, topWidth: 62, z: -370, lean: -12, crown: 10, fillOpacity: 0.34, lineOpacity: 0.16, glowOpacity: 0.06, parallax: 0.36 },
+        { x: 245, topY: 120, baseWidth: 100, topWidth: 62, z: -370, lean: 12, crown: 10, fillOpacity: 0.34, lineOpacity: 0.16, glowOpacity: 0.06, parallax: 0.36 },
+      );
+      deckLines.push(
+        { x1: -165, x2: 165, y: 30, z: -430 },
+        { x1: -250, x2: -80, y: -62, z: -300 },
+        { x1: 80, x2: 250, y: -62, z: -300 },
+      );
+      break;
+    case 'split':
+      towerConfigs.push(
+        { x: -195, topY: 300, baseWidth: 170, topWidth: 76, z: -540, lean: -32, crown: 18, fillOpacity: 0.28, lineOpacity: 0.13, glowOpacity: 0.05, parallax: 0.22 },
+        { x: 195, topY: 300, baseWidth: 170, topWidth: 76, z: -540, lean: 32, crown: 18, fillOpacity: 0.28, lineOpacity: 0.13, glowOpacity: 0.05, parallax: 0.22 },
+        { x: -248, topY: 120, baseWidth: 118, topWidth: 54, z: -340, lean: -18, crown: 12, fillOpacity: 0.38, lineOpacity: 0.16, glowOpacity: 0.06, parallax: 0.38 },
+        { x: 248, topY: 120, baseWidth: 118, topWidth: 54, z: -340, lean: 18, crown: 12, fillOpacity: 0.38, lineOpacity: 0.16, glowOpacity: 0.06, parallax: 0.38 },
+      );
+      deckLines.push(
+        { x1: -260, x2: -80, y: -40, z: -310 },
+        { x1: 80, x2: 260, y: -40, z: -310 },
+      );
+      break;
+    case 'spire':
+      towerConfigs.push(
+        { x: 0, topY: 310, baseWidth: 138, topWidth: 24, z: -540, crown: 24, fillOpacity: 0.30, lineOpacity: 0.13, glowOpacity: 0.05, parallax: 0.24 },
+        { x: -210, topY: 160, baseWidth: 110, topWidth: 52, z: -360, lean: -10, crown: 10, fillOpacity: 0.36, lineOpacity: 0.16, glowOpacity: 0.06, parallax: 0.38 },
+        { x: 210, topY: 160, baseWidth: 110, topWidth: 52, z: -360, lean: 10, crown: 10, fillOpacity: 0.36, lineOpacity: 0.16, glowOpacity: 0.06, parallax: 0.38 },
+      );
+      deckLines.push(
+        { x1: -220, x2: 220, y: -25, z: -340 },
+        { x1: -150, x2: 150, y: 55, z: -440 },
+      );
+      break;
+    case 'prism':
+      towerConfigs.push(
+        { x: -175, topY: 250, baseWidth: 132, topWidth: 40, z: -560, lean: -6, crown: 8, fillOpacity: 0.26, lineOpacity: 0.12, glowOpacity: 0.05, parallax: 0.24 },
+        { x: 175, topY: 250, baseWidth: 132, topWidth: 40, z: -560, lean: 6, crown: 8, fillOpacity: 0.26, lineOpacity: 0.12, glowOpacity: 0.05, parallax: 0.24 },
+        { x: 0, topY: 180, baseWidth: 116, topWidth: 28, z: -410, crown: 16, fillOpacity: 0.34, lineOpacity: 0.15, glowOpacity: 0.06, parallax: 0.34 },
+        { x: -248, topY: 90, baseWidth: 94, topWidth: 36, z: -300, lean: -8, crown: 8, fillOpacity: 0.34, lineOpacity: 0.16, glowOpacity: 0.06, parallax: 0.42 },
+        { x: 248, topY: 90, baseWidth: 94, topWidth: 36, z: -300, lean: 8, crown: 8, fillOpacity: 0.34, lineOpacity: 0.16, glowOpacity: 0.06, parallax: 0.42 },
+      );
+      deckLines.push(
+        { x1: -190, x2: 190, y: 6, z: -360 },
+        { x1: -255, x2: -70, y: -64, z: -270 },
+        { x1: 70, x2: 255, y: -64, z: -270 },
+      );
+      break;
+  }
+
+  for (const cfg of towerConfigs) {
+    const points = buildTowerPoints(cfg.x, floorY, cfg.topY, cfg.baseWidth, cfg.topWidth, cfg.lean ?? 0, cfg.crown ?? 0);
+    const structure = addLayeredSilhouette(group, points, cfg.z, shadowColor, rimColor,
+      cfg.fillOpacity, cfg.lineOpacity, cfg.glowOpacity, -18);
+    if (structure.fill) {
+      state.movers.push({
+        object: structure.fill,
+        basePosition: structure.fill.position.clone(),
+        baseRotationZ: structure.fill.rotation.z,
+        driftX: 2,
+        driftY: 2,
+        driftZ: 4,
+        sway: 0.003,
+        speed: 0.05,
+        phase: rng() * Math.PI * 2,
+        parallaxFactor: cfg.parallax,
+        moodInfluence: 0.24,
+        eventInfluence: 0.22,
+      });
+    }
+    if (structure.outline) {
+      state.movers.push({
+        object: structure.outline,
+        basePosition: structure.outline.position.clone(),
+        baseRotationZ: structure.outline.rotation.z,
+        driftX: 2,
+        driftY: 2,
+        driftZ: 4,
+        sway: 0.003,
+        speed: 0.05,
+        phase: rng() * Math.PI * 2,
+        parallaxFactor: cfg.parallax,
+        moodInfluence: 0.3,
+        eventInfluence: 0.28,
+      });
+    }
+  }
+
+  const deckPos: number[] = [];
+  for (const deck of deckLines) {
+    const thickness = 18;
+    const points: Array<[number, number]> = [
+      [deck.x1, deck.y],
+      [deck.x2, deck.y],
+      [deck.x2 - 12, deck.y - thickness],
+      [deck.x1 + 12, deck.y - thickness],
+    ];
+    addLayeredSilhouette(group, points, deck.z, deckColor, rimColor, 0.26, 0.11, 0.04, -12);
+    line(deckPos, deck.x1, deck.y, deck.z + 1, deck.x2, deck.y, deck.z + 1);
+    const supportStep = 54;
+    for (let x = deck.x1 + 18; x < deck.x2 - 18; x += supportStep) {
+      line(deckPos, x, deck.y - thickness, deck.z + 1, x + 12, floorY + 8, deck.z + 1);
+    }
+  }
+  if (deckPos.length > 0) {
+    const deckMesh = buildMesh(deckPos, rimColor, 0.10, 0.04);
+    deckMesh.renderOrder = -10;
+    group.add(deckMesh);
+    state.movers.push({
+      object: deckMesh,
+      basePosition: deckMesh.position.clone(),
+      baseRotationZ: deckMesh.rotation.z,
+      driftX: 3,
+      driftY: 2,
+      driftZ: 4,
+      sway: 0.003,
+      speed: 0.055,
+      phase: rng() * Math.PI * 2,
+      parallaxFactor: 0.46,
+      moodInfluence: 0.3,
+      eventInfluence: 0.25,
+    });
+  }
+
+  addLightCone(group, 0, 300, floorY, 40, 280, -780, art.palette.accent, 0.06, -24, state, rng, 0.18);
+  addLightCone(group, -140, 240, floorY, 28, 150, -520, art.palette.starlight, 0.045, -16, state, rng, 0.28);
+  addLightCone(group, 140, 240, floorY, 28, 150, -520, art.palette.starlight, 0.045, -16, state, rng, 0.28);
+}
+
+function lerpHex(a: number, b: number, t: number): number {
+  const color = new THREE.Color(a);
+  color.lerp(new THREE.Color(b), THREE.MathUtils.clamp(t, 0, 1));
+  return color.getHex();
+}
+
+function resolveBackgroundArtDirection(levelIndex: number): BackgroundArtDirection {
+  const palette = ATMOSPHERE_PALETTES[levelIndex] ?? ATMOSPHERE_PALETTES[levelIndex % ATMOSPHERE_PALETTES.length];
+  const preset = BACKGROUND_ART_PRESETS[levelIndex] ?? BACKGROUND_ART_PRESETS[levelIndex % BACKGROUND_ART_PRESETS.length];
+  return {
+    ...preset,
+    palette,
+  };
+}
+
+function makeBackdropTexture(seed: number, art: BackgroundArtDirection): THREE.Texture {
+  const size = 1024;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    const fallback = new Uint8Array([0, 0, 0, 255]);
+    const tex = new THREE.DataTexture(fallback, 1, 1);
+    tex.needsUpdate = true;
+    return tex;
+  }
+
+  const rng = seededRandom(seed);
+  const top = lerpHex(art.palette.nebulaA, 0x020306, 0.55);
+  const mid = lerpHex(art.palette.nebulaB, art.palette.nebulaA, 0.35);
+  const bot = lerpHex(art.palette.nebulaC, 0x020306, 0.75);
+  const grad = ctx.createLinearGradient(0, 0, 0, size);
+  grad.addColorStop(0, toRgba(top, 1));
+  grad.addColorStop(0.52, toRgba(mid, 1));
+  grad.addColorStop(1, toRgba(bot, 1));
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+
+  ctx.globalCompositeOperation = 'lighter';
+  const bloomCount = Math.floor(16 + art.starDensity * 10);
+  for (let i = 0; i < bloomCount; i++) {
+    const cx = rng() * size;
+    const cy = size * (0.08 + rng() * 0.84);
+    const radius = size * (0.08 + rng() * 0.24);
+    const c = i % 2 === 0 ? art.palette.nebulaB : art.palette.nebulaC;
+    const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+    glow.addColorStop(0, toRgba(c, 0.12 + rng() * 0.08));
+    glow.addColorStop(0.55, toRgba(c, 0.03 + rng() * 0.04));
+    glow.addColorStop(1, toRgba(c, 0));
+    ctx.fillStyle = glow;
+    ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+  }
+
+  ctx.globalCompositeOperation = 'source-over';
+  const horizonY = size * 0.57;
+  const lineColor = lerpHex(art.palette.starlight, art.palette.accent, 0.35);
+  ctx.strokeStyle = toRgba(lineColor, 0.12 * art.frameStrength);
+  ctx.lineWidth = 2;
+  for (let i = 0; i < 3; i++) {
+    const wobble = 2 + i * 2;
+    ctx.beginPath();
+    ctx.moveTo(0, horizonY + (i - 1) * 20);
+    for (let x = 0; x <= size; x += 18) {
+      const y = horizonY + (i - 1) * 20 + Math.sin(x * 0.018 + i * 1.6) * wobble;
+      ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  const vignette = ctx.createRadialGradient(size * 0.5, size * 0.5, size * 0.2, size * 0.5, size * 0.5, size * 0.75);
+  vignette.addColorStop(0, toRgba(0x000000, 0));
+  vignette.addColorStop(1, toRgba(0x000000, 0.48 * art.frameStrength));
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, size, size);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+function makeNebulaTexture(seed: number, art: BackgroundArtDirection): THREE.Texture {
   const size = 768;
   const canvas = document.createElement('canvas');
   canvas.width = size;
@@ -1625,33 +2178,36 @@ function makeNebulaTexture(seed: number, palette: AtmospherePalette): THREE.Text
   }
 
   const rng = seededRandom(seed);
-  ctx.fillStyle = toRgba(0x030507, 1);
+  ctx.fillStyle = toRgba(0x020306, 1);
   ctx.fillRect(0, 0, size, size);
 
   ctx.globalCompositeOperation = 'lighter';
-  const colors = [palette.nebulaA, palette.nebulaB, palette.nebulaC];
-  for (let i = 0; i < 26; i++) {
+  const colors = [art.palette.nebulaA, art.palette.nebulaB, art.palette.nebulaC];
+  const blotCount = Math.floor(22 + art.starDensity * 10);
+  for (let i = 0; i < blotCount; i++) {
     const cx = rng() * size;
     const cy = rng() * size;
-    const radius = size * (0.12 + rng() * 0.3);
+    const radius = size * (0.1 + rng() * 0.25);
     const color = colors[i % colors.length];
     const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
-    grad.addColorStop(0, toRgba(color, 0.16 + rng() * 0.18));
-    grad.addColorStop(0.5, toRgba(color, 0.05 + rng() * 0.08));
+    grad.addColorStop(0, toRgba(color, 0.18 + rng() * 0.12));
+    grad.addColorStop(0.55, toRgba(color, 0.05 + rng() * 0.06));
     grad.addColorStop(1, toRgba(color, 0));
     ctx.fillStyle = grad;
     ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
   }
 
   ctx.globalCompositeOperation = 'source-over';
-  ctx.strokeStyle = toRgba(palette.starlight, 0.1);
-  for (let i = 0; i < 120; i++) {
+  ctx.strokeStyle = toRgba(art.palette.starlight, 0.1);
+  ctx.lineWidth = 1.4;
+  for (let i = 0; i < 110; i++) {
     const x = rng() * size;
     const y = rng() * size;
-    const len = 2 + rng() * 12;
+    const len = 8 + rng() * 18;
+    const angle = art.streakAngle + (rng() - 0.5) * 0.45;
     ctx.beginPath();
     ctx.moveTo(x, y);
-    ctx.lineTo(x + len, y + len * 0.15);
+    ctx.lineTo(x + Math.cos(angle) * len, y + Math.sin(angle) * len);
     ctx.stroke();
   }
 
@@ -1679,8 +2235,8 @@ function makeStarTexture(starlight: number): THREE.Texture {
 
   const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
   grad.addColorStop(0, toRgba(starlight, 1));
-  grad.addColorStop(0.25, toRgba(starlight, 0.9));
-  grad.addColorStop(0.55, toRgba(starlight, 0.25));
+  grad.addColorStop(0.22, toRgba(starlight, 0.95));
+  grad.addColorStop(0.55, toRgba(starlight, 0.32));
   grad.addColorStop(1, toRgba(starlight, 0));
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, size, size);
@@ -1691,28 +2247,81 @@ function makeStarTexture(starlight: number): THREE.Texture {
   return tex;
 }
 
-function addNebulaPlanes(group: THREE.Group, palette: AtmospherePalette, rng: () => number, state: BackgroundAnimationState) {
-  const nebulaTexture = makeNebulaTexture(20000 + Math.floor(rng() * 5000), palette);
+function addBackdropPlane(group: THREE.Group, art: BackgroundArtDirection, rng: () => number, state: BackgroundAnimationState) {
+  const texture = makeBackdropTexture(15000 + Math.floor(rng() * 3000), art);
+  const plate = new THREE.Mesh(
+    new THREE.PlaneGeometry(2600, 1800),
+    new THREE.MeshBasicMaterial({
+      map: texture,
+      transparent: true,
+      opacity: 0.94,
+      depthWrite: false,
+      toneMapped: false,
+    }),
+  );
+  plate.position.set(0, 0, -1180);
+  plate.renderOrder = -45;
+  plate.frustumCulled = false;
+  group.add(plate);
+
+  state.movers.push({
+    object: plate,
+    basePosition: plate.position.clone(),
+    baseRotationZ: plate.rotation.z,
+    driftX: 8,
+    driftY: 5,
+    driftZ: 5,
+    sway: 0.004,
+    speed: 0.05,
+    phase: rng() * Math.PI * 2,
+    parallaxFactor: 0.08,
+    moodInfluence: 0.2,
+    eventInfluence: 0.3,
+  });
+
+  const mat = plate.material;
+  if (hasOpacity(mat)) {
+    state.pulses.push({
+      material: mat,
+      baseOpacity: mat.opacity,
+      amplitude: 0.03,
+      speed: 0.12,
+      phase: rng() * Math.PI * 2,
+      moodInfluence: 0.4,
+      eventInfluence: 0.4,
+    });
+  }
+}
+
+function addNebulaPlanes(group: THREE.Group, art: BackgroundArtDirection, rng: () => number, state: BackgroundAnimationState) {
+  const nebulaTexture = makeNebulaTexture(20000 + Math.floor(rng() * 5000), art);
   const nebulaRoot = new THREE.Group();
-  nebulaRoot.renderOrder = -30;
+  nebulaRoot.renderOrder = -32;
   group.add(nebulaRoot);
 
-  for (let i = 0; i < 3; i++) {
+  const layers = [
+    { width: 1940, height: 1380, z: -510, opacity: 0.26, tint: art.palette.nebulaA, driftX: 12, driftY: 7, driftZ: 7, speed: 0.085, sway: 0.018, parallax: 0.16 },
+    { width: 1720, height: 1210, z: -690, opacity: 0.21, tint: art.palette.nebulaB, driftX: 17, driftY: 11, driftZ: 10, speed: 0.098, sway: 0.022, parallax: 0.13 },
+    { width: 1480, height: 1020, z: -870, opacity: 0.16, tint: art.palette.nebulaC, driftX: 21, driftY: 15, driftZ: 13, speed: 0.112, sway: 0.026, parallax: 0.10 },
+  ];
+
+  for (let i = 0; i < layers.length; i++) {
+    const l = layers[i];
     const plane = new THREE.Mesh(
-      new THREE.PlaneGeometry(1900 - i * 220, 1350 - i * 150),
+      new THREE.PlaneGeometry(l.width, l.height),
       new THREE.MeshBasicMaterial({
         map: nebulaTexture,
-        color: i === 2 ? palette.nebulaC : i === 1 ? palette.nebulaB : palette.nebulaA,
+        color: l.tint,
         transparent: true,
-        opacity: 0.18 + (2 - i) * 0.07,
+        opacity: l.opacity,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
         toneMapped: false,
       }),
     );
-    plane.position.set((rng() - 0.5) * 140, (rng() - 0.5) * 90, -520 - i * 220);
+    plane.position.set((rng() - 0.5) * 100, (rng() - 0.5) * 70, l.z);
     plane.rotation.z = rng() * Math.PI * 2;
-    plane.renderOrder = -30 + i;
+    plane.renderOrder = -32 + i;
     plane.frustumCulled = false;
     nebulaRoot.add(plane);
 
@@ -1720,36 +2329,43 @@ function addNebulaPlanes(group: THREE.Group, palette: AtmospherePalette, rng: ()
       object: plane,
       basePosition: plane.position.clone(),
       baseRotationZ: plane.rotation.z,
-      driftX: 10 + i * 5,
-      driftY: 7 + i * 4,
-      driftZ: 5 + i * 3,
-      sway: 0.025 + i * 0.01,
-      speed: 0.08 + i * 0.03,
+      driftX: l.driftX,
+      driftY: l.driftY,
+      driftZ: l.driftZ,
+      sway: l.sway,
+      speed: l.speed,
       phase: rng() * Math.PI * 2,
+      parallaxFactor: l.parallax,
+      moodInfluence: 0.5,
+      eventInfluence: 0.65,
     });
     const mat = plane.material;
     if (hasOpacity(mat)) {
       state.pulses.push({
         material: mat,
         baseOpacity: mat.opacity,
-        amplitude: 0.18 + i * 0.05,
-        speed: 0.2 + i * 0.08,
+        amplitude: 0.14 + i * 0.03,
+        speed: 0.2 + i * 0.06,
         phase: rng() * Math.PI * 2,
+        moodInfluence: 0.7,
+        eventInfluence: 0.5,
       });
     }
   }
 }
 
-function addStarfield(group: THREE.Group, palette: AtmospherePalette, rng: () => number, state: BackgroundAnimationState) {
-  const starTexture = makeStarTexture(palette.starlight);
+function addStarfield(group: THREE.Group, art: BackgroundArtDirection, rng: () => number, state: BackgroundAnimationState) {
+  const starTexture = makeStarTexture(art.palette.starlight);
   const starRoot = new THREE.Group();
-  starRoot.renderOrder = -15;
+  starRoot.renderOrder = -16;
   group.add(starRoot);
 
+  const starScale = art.starDensity;
   const layers = [
-    { count: 450, size: 2.6, opacity: 0.82, zMin: -260, zMax: -700 },
-    { count: 300, size: 1.8, opacity: 0.62, zMin: -430, zMax: -980 },
+    { count: Math.floor(210 * starScale), size: 2.2, opacity: 0.58, zMin: -250, zMax: -650, accentChance: 0.15, driftX: 13, driftY: 7, driftZ: 9, speed: 0.085, sway: 0.012, parallax: 0.38 },
+    { count: Math.floor(120 * starScale), size: 1.6, opacity: 0.42, zMin: -420, zMax: -940, accentChance: 0.10, driftX: 18, driftY: 10, driftZ: 12, speed: 0.067, sway: 0.018, parallax: 0.26 },
   ];
+
   for (let li = 0; li < layers.length; li++) {
     const layer = layers[li];
     const positions = new Float32Array(layer.count * 3);
@@ -1757,11 +2373,11 @@ function addStarfield(group: THREE.Group, palette: AtmospherePalette, rng: () =>
     const c = new THREE.Color();
     for (let i = 0; i < layer.count; i++) {
       const idx = i * 3;
-      positions[idx] = (rng() - 0.5) * 2200;
-      positions[idx + 1] = (rng() - 0.5) * 1400;
+      positions[idx] = (rng() - 0.5) * 2300;
+      positions[idx + 1] = (rng() - 0.5) * 1450;
       positions[idx + 2] = layer.zMin - rng() * (layer.zMax - layer.zMin);
-      c.setHex(rng() > 0.84 ? palette.accent : palette.starlight);
-      const tint = 0.7 + rng() * 0.3;
+      c.setHex(rng() < layer.accentChance ? art.palette.accent : art.palette.starlight);
+      const tint = 0.68 + rng() * 0.32;
       colors[idx] = c.r * tint;
       colors[idx + 1] = c.g * tint;
       colors[idx + 2] = c.b * tint;
@@ -1785,53 +2401,198 @@ function addStarfield(group: THREE.Group, palette: AtmospherePalette, rng: () =>
     });
     const points = new THREE.Points(geometry, material);
     points.frustumCulled = false;
-    points.renderOrder = -14 + li;
+    points.renderOrder = -15 + li;
     starRoot.add(points);
 
     state.movers.push({
       object: points,
       basePosition: points.position.clone(),
       baseRotationZ: points.rotation.z,
-      driftX: li === 0 ? 12 : 20,
-      driftY: li === 0 ? 6 : 10,
-      driftZ: li === 0 ? 8 : 14,
-      sway: li === 0 ? 0.014 : 0.022,
-      speed: li === 0 ? 0.09 : 0.06,
+      driftX: layer.driftX,
+      driftY: layer.driftY,
+      driftZ: layer.driftZ,
+      sway: layer.sway,
+      speed: layer.speed,
       phase: rng() * Math.PI * 2,
+      parallaxFactor: layer.parallax,
+      moodInfluence: 0.45,
+      eventInfluence: 0.35,
     });
     state.pulses.push({
       material,
       baseOpacity: material.opacity,
-      amplitude: 0.18,
-      speed: 0.4 + li * 0.18,
+      amplitude: 0.13 + li * 0.04,
+      speed: 0.34 + li * 0.15,
       phase: rng() * Math.PI * 2,
+      moodInfluence: 0.6,
+      eventInfluence: 0.25,
     });
   }
 }
 
-function addEnergyStreaks(group: THREE.Group, palette: AtmospherePalette, rng: () => number, state: BackgroundAnimationState) {
+function addEnergyStreaks(group: THREE.Group, art: BackgroundArtDirection, rng: () => number, state: BackgroundAnimationState) {
   const streakPos: number[] = [];
-  for (let i = 0; i < 110; i++) {
-    const x = (rng() - 0.5) * 1400;
-    const y = (rng() - 0.5) * 900;
-    const z = -220 - rng() * 740;
-    const len = 35 + rng() * 160;
-    const angle = -0.5 + rng() * 1.0;
-    line(streakPos, x, y, z, x + Math.cos(angle) * len, y + Math.sin(angle) * len, z - rng() * 80);
+  const count = Math.floor(24 + art.frameStrength * 18);
+  for (let i = 0; i < count; i++) {
+    const x = (rng() - 0.5) * 1500;
+    const y = (rng() - 0.5) * 920;
+    const z = -220 - rng() * 760;
+    const len = 40 + rng() * 120;
+    const angle = art.streakAngle + (rng() - 0.5) * 0.55;
+    line(streakPos, x, y, z, x + Math.cos(angle) * len, y + Math.sin(angle) * len, z - rng() * 75);
   }
-  const streaks = buildMesh(streakPos, palette.accent, 0.14, 0.07);
-  streaks.renderOrder = -5;
+  const streakColor = lerpHex(art.palette.accent, art.palette.nebulaC, 0.28);
+  const streaks = buildMesh(streakPos, streakColor, 0.13 + art.pulseBias * 0.03, 0.07);
+  streaks.renderOrder = -7;
   group.add(streaks);
   state.movers.push({
     object: streaks,
     basePosition: streaks.position.clone(),
     baseRotationZ: streaks.rotation.z,
     driftX: 8,
-    driftY: 14,
+    driftY: 13,
     driftZ: 10,
-    sway: 0.02,
-    speed: 0.11,
+    sway: 0.015,
+    speed: 0.115,
     phase: rng() * Math.PI * 2,
+    parallaxFactor: 0.55,
+    moodInfluence: 0.55,
+    eventInfluence: 0.8,
+  });
+}
+
+function buildHeroMotif(positions: number[], motif: HeroMotif, cx: number, cy: number, z: number, scale: number) {
+  if (motif === 'halo') {
+    buildConcentricRings(positions, cx, cy, z, 7, scale, 18);
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      const inner = scale * 0.45;
+      const outer = scale * 1.08;
+      line(positions, cx + Math.cos(a) * inner, cy + Math.sin(a) * inner, z, cx + Math.cos(a) * outer, cy + Math.sin(a) * outer, z);
+    }
+    return;
+  }
+
+  if (motif === 'gateway') {
+    const w = scale * 0.7;
+    const h = scale * 1.0;
+    const inset = scale * 0.22;
+    line(positions, cx - w, cy - h, z, cx - w * 0.72, cy + h, z);
+    line(positions, cx - w * 0.72, cy + h, z, cx + w * 0.72, cy + h, z);
+    line(positions, cx + w * 0.72, cy + h, z, cx + w, cy - h, z);
+    line(positions, cx + w, cy - h, z, cx - w, cy - h, z);
+    line(positions, cx - w + inset, cy - h + inset, z, cx - w * 0.54, cy + h - inset, z);
+    line(positions, cx - w * 0.54, cy + h - inset, z, cx + w * 0.54, cy + h - inset, z);
+    line(positions, cx + w * 0.54, cy + h - inset, z, cx + w - inset, cy - h + inset, z);
+    line(positions, cx + w - inset, cy - h + inset, z, cx - w + inset, cy - h + inset, z);
+    line(positions, cx, cy + h * 0.92, z, cx, cy - h * 0.94, z);
+    return;
+  }
+
+  if (motif === 'split') {
+    const w = scale * 0.85;
+    const h = scale * 1.0;
+    line(positions, cx - w, cy + h, z, cx + w, cy + h, z);
+    line(positions, cx - w, cy - h, z, cx + w, cy - h, z);
+    line(positions, cx - w * 0.95, cy + h * 0.75, z, cx - w * 0.12, cy - h, z);
+    line(positions, cx + w * 0.95, cy + h * 0.75, z, cx + w * 0.12, cy - h, z);
+    line(positions, cx - w * 0.08, cy + h, z, cx - w * 0.08, cy -h, z);
+    line(positions, cx + w * 0.08, cy + h, z, cx + w * 0.08, cy -h, z);
+    line(positions, cx - w * 0.62, cy + h * 0.32, z, cx + w * 0.62, cy + h * 0.32, z);
+    line(positions, cx - w * 0.62, cy -h * 0.28, z, cx + w * 0.62, cy -h * 0.28, z);
+    return;
+  }
+
+  if (motif === 'spire') {
+    const w = scale * 0.84;
+    const h = scale * 1.08;
+    line(positions, cx - w, cy -h, z, cx, cy + h, z);
+    line(positions, cx, cy + h, z, cx + w, cy -h, z);
+    line(positions, cx - w, cy -h, z, cx + w, cy -h, z);
+    line(positions, cx - w * 0.55, cy -h, z, cx, cy + h * 0.55, z);
+    line(positions, cx, cy + h * 0.55, z, cx + w * 0.55, cy -h, z);
+    line(positions, cx - w * 0.24, cy -h, z, cx, cy + h * 0.18, z);
+    line(positions, cx, cy + h * 0.18, z, cx + w * 0.24, cy -h, z);
+    line(positions, cx, cy + h * 1.14, z, cx, cy -h, z);
+    return;
+  }
+
+  const w = scale * 0.75;
+  const h = scale * 1.0;
+  line(positions, cx, cy + h, z, cx + w, cy, z);
+  line(positions, cx + w, cy, z, cx, cy -h, z);
+  line(positions, cx, cy -h, z, cx - w, cy, z);
+  line(positions, cx - w, cy, z, cx, cy + h, z);
+  line(positions, cx, cy + h * 0.55, z, cx + w * 0.55, cy, z);
+  line(positions, cx + w * 0.55, cy, z, cx, cy -h * 0.55, z);
+  line(positions, cx, cy -h * 0.55, z, cx - w * 0.55, cy, z);
+  line(positions, cx - w * 0.55, cy, z, cx, cy + h * 0.55, z);
+  line(positions, cx - w * 0.9, cy -h * 0.2, z, cx + w * 0.9, cy -h * 0.2, z);
+}
+
+function addHeroMotif(group: THREE.Group, art: BackgroundArtDirection, rng: () => number, state: BackgroundAnimationState) {
+  const heroPos: number[] = [];
+  buildHeroMotif(heroPos, art.heroMotif, 0, art.heroY, -180, art.heroScale);
+  const heroColor = lerpHex(art.palette.accent, art.palette.starlight, 0.38);
+  const hero = buildMesh(heroPos, heroColor, 0.25 + art.pulseBias * 0.08, 0.13 + art.frameStrength * 0.04);
+  hero.renderOrder = -5;
+  group.add(hero);
+
+  state.movers.push({
+    object: hero,
+    basePosition: hero.position.clone(),
+    baseRotationZ: hero.rotation.z,
+    driftX: 4,
+    driftY: 6,
+    driftZ: 4,
+    sway: 0.012,
+    speed: 0.09,
+    phase: rng() * Math.PI * 2,
+    parallaxFactor: 0.75,
+    moodInfluence: 0.9,
+    eventInfluence: 0.8,
+  });
+}
+
+function addFramingContours(group: THREE.Group, art: BackgroundArtDirection, rng: () => number, state: BackgroundAnimationState) {
+  const framePos: number[] = [];
+  const frame = art.frameStrength;
+  const sideBase = HW + 70;
+  const top = HH + 150;
+  const bottom = -HH - 100;
+  for (let i = 0; i < 3; i++) {
+    const x = sideBase + i * 56;
+    const z = -120 - i * 65;
+    line(framePos, -x, top - i * 14, z, -x, bottom + i * 14, z);
+    line(framePos, x, top - i * 14, z, x, bottom + i * 14, z);
+    line(framePos, -x, top - i * 14, z, -x + 72, top - 58 - i * 12, z);
+    line(framePos, x, top - i * 14, z, x - 72, top - 58 - i * 12, z);
+  }
+
+  for (let i = 0; i < 2; i++) {
+    const y = -40 + i * 26;
+    const z = -160 - i * 48;
+    line(framePos, -HW - 30, y, z, HW + 30, y, z);
+  }
+
+  const color = lerpHex(art.palette.starlight, art.palette.nebulaC, 0.2);
+  const frameMesh = buildMesh(framePos, color, 0.07 * frame, 0.03 * frame);
+  frameMesh.renderOrder = -8;
+  group.add(frameMesh);
+
+  state.movers.push({
+    object: frameMesh,
+    basePosition: frameMesh.position.clone(),
+    baseRotationZ: frameMesh.rotation.z,
+    driftX: 2,
+    driftY: 3,
+    driftZ: 3,
+    sway: 0.006,
+    speed: 0.058,
+    phase: rng() * Math.PI * 2,
+    parallaxFactor: 0.52,
+    moodInfluence: 0.35,
+    eventInfluence: 0.35,
   });
 }
 
@@ -1845,16 +2606,18 @@ function registerLinePulses(group: THREE.Group, rng: () => number, state: Backgr
       state.pulses.push({
         material: mat,
         baseOpacity: mat.opacity,
-        amplitude: mat.blending === THREE.AdditiveBlending ? 0.16 : 0.08,
-        speed: 0.18 + rng() * 1.1,
+        amplitude: mat.blending === THREE.AdditiveBlending ? 0.12 : 0.06,
+        speed: 0.16 + rng() * 0.7,
         phase: rng() * Math.PI * 2,
+        moodInfluence: mat.blending === THREE.AdditiveBlending ? 0.8 : 0.45,
+        eventInfluence: mat.blending === THREE.AdditiveBlending ? 0.7 : 0.32,
       });
     }
   });
 }
 
 function buildAtmosphere(group: THREE.Group, levelIndex: number): BackgroundAnimationState {
-  const palette = ATMOSPHERE_PALETTES[levelIndex] ?? ATMOSPHERE_PALETTES[0];
+  const artDirection = resolveBackgroundArtDirection(levelIndex);
   const rng = seededRandom(12000 + levelIndex * 977);
   const state: BackgroundAnimationState = {
     pulses: [],
@@ -1863,10 +2626,20 @@ function buildAtmosphere(group: THREE.Group, levelIndex: number): BackgroundAnim
     baseGroupX: group.position.x,
     baseGroupY: group.position.y,
     phase: rng() * Math.PI * 2,
+    artDirection,
+    smoothedMoodPulse: artDirection.pulseBias,
+    smoothedEventPulse: 0,
+    smoothedParallaxX: 0,
+    smoothedParallaxY: 0,
   };
-  addNebulaPlanes(group, palette, rng, state);
-  addStarfield(group, palette, rng, state);
-  addEnergyStreaks(group, palette, rng, state);
+  addBackdropPlane(group, artDirection, rng, state);
+  addNebulaPlanes(group, artDirection, rng, state);
+  addArchitecturalMasses(group, artDirection, rng, state);
+  addStageMotifComposition(group, levelIndex, artDirection, rng, state);
+  addStarfield(group, artDirection, rng, state);
+  addEnergyStreaks(group, artDirection, rng, state);
+  addFramingContours(group, artDirection, rng, state);
+  addHeroMotif(group, artDirection, rng, state);
   registerLinePulses(group, rng, state);
   return state;
 }
@@ -1882,28 +2655,65 @@ export function buildBackground(_renderer: Renderer, levelIndex: number): THREE.
     buildLevel5, buildLevel6, buildLevel7, buildLevel8, buildLevel9,
   ];
   (builders[levelIndex] ?? builders[0])(group);
-  group.userData.backgroundAnimation = buildAtmosphere(group, levelIndex);
+  const animationState = buildAtmosphere(group, levelIndex);
+  group.userData.backgroundAnimation = animationState;
+  group.userData.backgroundArtName = animationState.artDirection.name;
   return group;
 }
 
-export function animateBackground(group: THREE.Group, now: number) {
+export function animateBackground(group: THREE.Group, now: number, controls: BackgroundRuntimeControls = {}) {
   const state = group.userData.backgroundAnimation as BackgroundAnimationState | undefined;
   if (!state) return;
 
   const t = now * 0.001;
-  group.rotation.z = state.baseGroupRotationZ + Math.sin(t * 0.08 + state.phase) * 0.01;
-  group.position.x = state.baseGroupX + Math.sin(t * 0.13 + state.phase * 0.7) * 5;
-  group.position.y = state.baseGroupY + Math.sin(t * 0.11 + state.phase * 0.5) * 4;
+  const art = state.artDirection;
+  const targetMood = THREE.MathUtils.clamp(controls.moodPulse ?? art.pulseBias, 0.2, 1.2);
+  const targetEvent = THREE.MathUtils.clamp(controls.eventPulse ?? 0, 0, 1);
+  const targetParallaxX = THREE.MathUtils.clamp(controls.parallaxX ?? 0, -1, 1);
+  const targetParallaxY = THREE.MathUtils.clamp(controls.parallaxY ?? 0, -1, 1);
+  const ballEnergy = THREE.MathUtils.clamp(controls.ballEnergy ?? 1, 0.45, 1.8);
+
+  state.smoothedMoodPulse += (targetMood - state.smoothedMoodPulse) * 0.08;
+  state.smoothedEventPulse += (targetEvent - state.smoothedEventPulse) * 0.1;
+  state.smoothedParallaxX += (targetParallaxX - state.smoothedParallaxX) * 0.09;
+  state.smoothedParallaxY += (targetParallaxY - state.smoothedParallaxY) * 0.09;
+
+  const moodShift = state.smoothedMoodPulse - art.pulseBias;
+  const groupDrift = 0.8 + state.smoothedMoodPulse * 0.65 + state.smoothedEventPulse * 0.45;
+  const groupParallax = 11 + art.frameStrength * 8;
+  group.rotation.z = state.baseGroupRotationZ
+    + Math.sin(t * 0.08 + state.phase) * (0.008 + art.frameStrength * 0.004)
+    + state.smoothedParallaxX * 0.005;
+  group.position.x = state.baseGroupX
+    + Math.sin(t * 0.13 + state.phase * 0.7) * (4.6 * groupDrift)
+    + state.smoothedParallaxX * groupParallax;
+  group.position.y = state.baseGroupY
+    + Math.sin(t * 0.11 + state.phase * 0.5) * (3.8 * groupDrift)
+    + state.smoothedParallaxY * (groupParallax * 0.45);
 
   for (const mover of state.movers) {
-    mover.object.position.x = mover.basePosition.x + Math.sin(t * mover.speed + mover.phase) * mover.driftX;
-    mover.object.position.y = mover.basePosition.y + Math.cos(t * (mover.speed * 0.8) + mover.phase) * mover.driftY;
-    mover.object.position.z = mover.basePosition.z + Math.sin(t * (mover.speed * 0.55) + mover.phase) * mover.driftZ;
-    mover.object.rotation.z = mover.baseRotationZ + Math.sin(t * 0.16 + mover.phase) * mover.sway;
+    const moodMul = 1 + mover.moodInfluence * moodShift * 1.35;
+    const eventMul = 1 + mover.eventInfluence * state.smoothedEventPulse;
+    const driftMul = moodMul * eventMul * (0.82 + ballEnergy * 0.4);
+    mover.object.position.x = mover.basePosition.x
+      + Math.sin(t * mover.speed + mover.phase) * mover.driftX * driftMul
+      + state.smoothedParallaxX * mover.parallaxFactor * 22;
+    mover.object.position.y = mover.basePosition.y
+      + Math.cos(t * (mover.speed * 0.8) + mover.phase) * mover.driftY * driftMul
+      + state.smoothedParallaxY * mover.parallaxFactor * 14;
+    mover.object.position.z = mover.basePosition.z
+      + Math.sin(t * (mover.speed * 0.55) + mover.phase) * mover.driftZ * driftMul;
+    mover.object.rotation.z = mover.baseRotationZ
+      + Math.sin(t * 0.16 + mover.phase) * mover.sway * (0.9 + driftMul * 0.35);
   }
 
   for (const pulse of state.pulses) {
-    const wave = 1 + Math.sin(t * pulse.speed + pulse.phase) * pulse.amplitude;
+    const ampScale = 1
+      + pulse.moodInfluence * moodShift * 1.7
+      + pulse.eventInfluence * state.smoothedEventPulse * 1.15;
+    const amplitude = Math.max(0.01, pulse.amplitude * ampScale);
+    const speed = pulse.speed * (0.9 + state.smoothedMoodPulse * 0.45 + state.smoothedEventPulse * 0.25);
+    const wave = 1 + Math.sin(t * speed + pulse.phase) * amplitude;
     pulse.material.opacity = Math.max(0.01, Math.min(1, pulse.baseOpacity * wave));
   }
 }
