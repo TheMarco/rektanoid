@@ -8,10 +8,11 @@ const D = 'drop';
 const U = 'sentimentUp';
 const R = 'sentimentDown';
 const I = 'indestructible';
-const Z = 'hazard';
+const C = 'stable';
+const M = 'diamond';
 const _ = null;
 
-// Split in half — left side green, right side mirrored, indestructible wall down center
+// Diamond shape around halving wall — stablecoins and diamonds frame the event
 export const stage07: LevelDefinition = {
   id: 'stage07',
   name: 'The Halving',
@@ -19,14 +20,13 @@ export const stage07: LevelDefinition = {
   speedMultiplier: 1.25,
   allowedPowerups: null,
   layout: [
-    [U, S, T, S, D, I, I, D, S, T, S, R],
-    [S, T, H, T, _, I, I, _, T, H, T, S],
-    [T, S, E, _, _, I, I, _, _, E, S, T],
-    [S, H, _, _, _, I, I, _, _, _, H, S],
-    [D, _, _, _, _, I, I, _, _, _, _, D],
-    [S, H, _, _, _, I, I, _, _, _, H, S],
-    [T, S, E, _, _, I, I, _, _, E, S, T],
-    [S, T, H, T, _, I, I, _, T, H, T, S],
-    [U, S, T, S, D, I, I, D, S, T, S, R],
+    [M, S, S, I, I, S, S, M],
+    [S, T, S, I, I, C, _, S],
+    [T, S, M, I, I, M, _, T],
+    [D, _, M, I, I, M, _, D],
+    [T, C, M, I, I, M, C, T],
+    [S, _, C, I, I, C, _, S],
+    [U, S, _, I, I, _, C, U],
+    [M, S, S, I, I, S, S, M],
   ],
 };

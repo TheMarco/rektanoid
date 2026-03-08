@@ -1,15 +1,15 @@
 // ── Paddle ──
 export const PADDLE_SPEED = 500;
-export const PADDLE_WIDTH = 100;
-export const PADDLE_HEIGHT = 14;
-export const PADDLE_Y_OFFSET = 50; // from bottom
-export const PADDLE_WIDTH_EXPANDED = 150;
-export const PADDLE_WIDTH_SHRUNK = 60;
+export const PADDLE_WIDTH = 80;
+export const PADDLE_HEIGHT = 12;
+export const PADDLE_Y_OFFSET = 110; // from bottom (above HUD bar)
+export const PADDLE_WIDTH_EXPANDED = 120;
+export const PADDLE_WIDTH_SHRUNK = 48;
 
 // ── Ball ──
-export const BALL_RADIUS = 6;
-export const BALL_BASE_SPEED = 350;
-export const BALL_SPEED_CAP = 600;
+export const BALL_RADIUS = 3;
+export const BALL_BASE_SPEED = 420;
+export const BALL_SPEED_CAP = 700;
 export const BALL_SPEED_INCREMENT = 5; // per brick hit
 export const BALL_MIN_VERTICAL_RATIO = 0.3; // prevent flat angles
 export const BALL_LAUNCH_ANGLE_DEG = -75; // degrees from horizontal
@@ -42,13 +42,13 @@ export const SENTIMENT_COMBO_BOOST = 2;
 export const SENTIMENT_BULL_SCORE_BONUS = 1.5;
 
 // ── Bricks ──
-export const BRICK_COLS = 12;
+export const BRICK_COLS = 8;
 export const BRICK_ROWS = 8;
-export const BRICK_WIDTH = 58;
-export const BRICK_HEIGHT = 20;
+export const BRICK_WIDTH = 50;
+export const BRICK_HEIGHT = 18;
 export const BRICK_PADDING = 4;
-export const BRICK_OFFSET_X = 38;
-export const BRICK_OFFSET_Y = 60;
+export const BRICK_OFFSET_X = 9;
+export const BRICK_OFFSET_Y = 70;
 
 // ── Laser ──
 export const LASER_SPEED = 500;

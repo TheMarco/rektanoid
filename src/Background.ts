@@ -1083,7 +1083,7 @@ interface CaveConfig {
 }
 
 const DEFAULTS: CaveConfig = {
-  color: 0x00ff88, seed: 42, centerY: 40, baseRadius: 380,
+  color: 0x00ff88, seed: 42, centerY: 40, baseRadius: 500,
   depthLayers: 8, depthSpacing: 70, samples: 60, jaggedness: 1.0,
   connectStride: 4, stalactiteDensity: 0.25, rockDetailDensity: 0.2,
   coreOpacity: 0.45, glowOpacity: 0.22, depthFade: 0.09,
@@ -1150,7 +1150,7 @@ function buildCave(group: THREE.Group, cfg: Partial<CaveConfig>) {
 /** Level 0: Genesis Block — blockchain cubes, giant BTC symbol, hash streams, data rain */
 function buildLevel0(group: THREE.Group) {
   buildCave(group, {
-    color: 0x1199aa, accentColor: 0x22ccdd, seed: 100, baseRadius: 420,
+    color: 0x1199aa, accentColor: 0x22ccdd, seed: 100, baseRadius: 560,
     jaggedness: 0.4, depthLayers: 6, depthSpacing: 85, connectStride: 5,
     stalactiteDensity: 0.08, rockDetailDensity: 0.08, samples: 40,
     coreOpacity: 0.40, glowOpacity: 0.18, depthFade: 0.07,
@@ -1189,7 +1189,7 @@ function buildLevel0(group: THREE.Group) {
 function buildLevel1(group: THREE.Group) {
   buildCave(group, {
     color: 0x11aa44, accentColor: 0x44ff88, seed: 200, centerY: 60,
-    baseRadius: 400, jaggedness: 0.6, depthLayers: 7, depthSpacing: 75,
+    baseRadius: 530, jaggedness: 0.6, depthLayers: 7, depthSpacing: 75,
     stalactiteDensity: 0.15, rockDetailDensity: 0.12, connectStride: 4,
     coreOpacity: 0.40, glowOpacity: 0.18, depthFade: 0.07,
   });
@@ -1230,7 +1230,7 @@ function buildLevel1(group: THREE.Group) {
 function buildLevel2(group: THREE.Group) {
   buildCave(group, {
     color: 0x882233, accentColor: 0xcc3344, seed: 300, centerY: 30,
-    baseRadius: 340, jaggedness: 1.8, depthLayers: 12, depthSpacing: 42,
+    baseRadius: 450, jaggedness: 1.8, depthLayers: 12, depthSpacing: 42,
     connectStride: 2, stalactiteDensity: 0.55, rockDetailDensity: 0.45,
     samples: 80, coreOpacity: 0.42, glowOpacity: 0.18, depthFade: 0.07,
   });
@@ -1270,7 +1270,7 @@ function buildLevel2(group: THREE.Group) {
 function buildLevel3(group: THREE.Group) {
   buildCave(group, {
     color: 0xaa7722, accentColor: 0xddaa33, seed: 400, centerY: 50,
-    baseRadius: 380, jaggedness: 0.9, depthLayers: 8, depthSpacing: 65,
+    baseRadius: 505, jaggedness: 0.9, depthLayers: 8, depthSpacing: 65,
     stalactiteDensity: 0.25, connectStride: 3,
     coreOpacity: 0.40, glowOpacity: 0.18, depthFade: 0.07,
   });
@@ -1313,7 +1313,7 @@ function buildLevel3(group: THREE.Group) {
 function buildLevel4(group: THREE.Group) {
   buildCave(group, {
     color: 0x2288cc, accentColor: 0x66bbff, seed: 500, centerY: 40,
-    baseRadius: 370, jaggedness: 1.5, depthLayers: 9, depthSpacing: 55,
+    baseRadius: 490, jaggedness: 1.5, depthLayers: 9, depthSpacing: 55,
     stalactiteDensity: 0.45, rockDetailDensity: 0.35, connectStride: 2,
     samples: 85, coreOpacity: 0.40, glowOpacity: 0.18, depthFade: 0.07,
   });
@@ -1357,7 +1357,7 @@ function buildLevel4(group: THREE.Group) {
 function buildLevel5(group: THREE.Group) {
   buildCave(group, {
     color: 0x661122, accentColor: 0x992233, seed: 600, centerY: 10,
-    baseRadius: 320, jaggedness: 1.5, depthLayers: 13, depthSpacing: 40,
+    baseRadius: 425, jaggedness: 1.5, depthLayers: 13, depthSpacing: 40,
     stalactiteDensity: 0.55, rockDetailDensity: 0.45, connectStride: 2,
     samples: 70, coreOpacity: 0.42, glowOpacity: 0.18, depthFade: 0.07,
   });
@@ -1403,7 +1403,7 @@ function buildLevel5(group: THREE.Group) {
 function buildLevel6(group: THREE.Group) {
   buildCave(group, {
     color: 0x6644aa, accentColor: 0xddaa44, seed: 700, centerY: 45,
-    baseRadius: 400, jaggedness: 0.5, depthLayers: 7, depthSpacing: 80,
+    baseRadius: 530, jaggedness: 0.5, depthLayers: 7, depthSpacing: 80,
     connectStride: 4, stalactiteDensity: 0.12, rockDetailDensity: 0.08,
     coreOpacity: 0.40, glowOpacity: 0.18, depthFade: 0.07,
   });
@@ -1454,7 +1454,7 @@ function buildLevel6(group: THREE.Group) {
 function buildLevel7(group: THREE.Group) {
   buildCave(group, {
     color: 0x1155ee, accentColor: 0x33aaff, seed: 800, centerY: 35,
-    baseRadius: 350, jaggedness: 1.8, depthLayers: 11, depthSpacing: 45,
+    baseRadius: 465, jaggedness: 1.8, depthLayers: 11, depthSpacing: 45,
     stalactiteDensity: 0.40, rockDetailDensity: 0.45, connectStride: 2,
     samples: 90, coreOpacity: 0.40, glowOpacity: 0.18, depthFade: 0.07,
   });
@@ -1501,7 +1501,7 @@ function buildLevel7(group: THREE.Group) {
 function buildLevel8(group: THREE.Group) {
   buildCave(group, {
     color: 0xaa2211, accentColor: 0xff6622, seed: 900, centerY: 20,
-    baseRadius: 310, jaggedness: 1.8, depthLayers: 14, depthSpacing: 36,
+    baseRadius: 410, jaggedness: 1.8, depthLayers: 14, depthSpacing: 36,
     stalactiteDensity: 0.60, rockDetailDensity: 0.50, connectStride: 2,
     samples: 85, coreOpacity: 0.45, glowOpacity: 0.21, depthFade: 0.06,
   });
@@ -1554,7 +1554,7 @@ function buildLevel8(group: THREE.Group) {
 function buildLevel9(group: THREE.Group) {
   buildCave(group, {
     color: 0x7733cc, accentColor: 0xaa55ff, seed: 1000, centerY: 55,
-    baseRadius: 430, jaggedness: 1.0, depthLayers: 10, depthSpacing: 65,
+    baseRadius: 570, jaggedness: 1.0, depthLayers: 10, depthSpacing: 65,
     connectStride: 3, stalactiteDensity: 0.25, rockDetailDensity: 0.20,
     coreOpacity: 0.40, glowOpacity: 0.18, depthFade: 0.07,
   });

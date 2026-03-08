@@ -12,7 +12,7 @@ const CRT_SHADER = {
   uniforms: {
     tDiffuse: { value: null as THREE.Texture | null },
     time: { value: 0 },
-    resolution: { value: new THREE.Vector2(800, 600) },
+    resolution: { value: new THREE.Vector2(450, 800) },
     strength: { value: 1.0 },
   },
 

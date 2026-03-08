@@ -6,9 +6,10 @@ const E = 'explosive';
 const D = 'drop';
 const U = 'sentimentUp';
 const R = 'sentimentDown';
+const F = 'fomo';
 const _ = null;
 
-// Two candlesticks: green pump on left, red dump on right
+// Two candlesticks: green pump on left, red dump on right — FOMO bricks add urgency
 export const stage04: LevelDefinition = {
   id: 'stage04',
   name: 'Pump & Dump',
@@ -16,14 +17,13 @@ export const stage04: LevelDefinition = {
   speedMultiplier: 1.1,
   allowedPowerups: null,
   layout: [
-    [_, _, U, _, _, _, _, _, _, _, _, _],
-    [_, U, U, U, _, _, _, _, _, R, _, _],
-    [_, U, U, U, _, _, _, _, R, R, R, _],
-    [_, U, U, U, _, _, _, _, R, R, R, _],
-    [_, U, U, U, _, D, D, _, R, R, R, _],
-    [_, _, U, _, _, _, _, _, R, R, R, _],
-    [_, _, _, _, _, _, _, _, R, R, R, _],
-    [_, _, _, _, _, E, E, _, R, R, R, _],
-    [_, _, _, _, _, _, _, _, _, R, _, _],
+    [_, U, _, _, _, _, _, _],
+    [U, U, U, _, _, _, R, _],
+    [U, U, U, F, _, R, R, R],
+    [U, U, U, D, _, R, R, R],
+    [_, U, _, _, _, R, R, R],
+    [_, _, _, D, F, R, R, R],
+    [_, _, _, _, _, R, R, R],
+    [_, _, _, E, E, _, R, _],
   ],
 };

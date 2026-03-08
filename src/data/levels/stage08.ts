@@ -2,15 +2,16 @@ import type { LevelDefinition } from '../../types/LevelDefinition';
 
 const S = 'standard';
 const T = 'tough';
-const H = 'tough3';
 const E = 'explosive';
 const D = 'drop';
 const U = 'sentimentUp';
 const I = 'indestructible';
-const Z = 'hazard';
+const W = 'whale';
+const N = 'influencer';
+const G = 'rug';
 const _ = null;
 
-// Maze with corridors — DeFi yield farming paths
+// Liquidity pool maze — whale walls block paths, influencers at junctions
 export const stage08: LevelDefinition = {
   id: 'stage08',
   name: 'DeFi Maze',
@@ -18,14 +19,14 @@ export const stage08: LevelDefinition = {
   speedMultiplier: 1.3,
   allowedPowerups: null,
   layout: [
-    [I, I, I, I, I, _, _, I, I, I, I, I],
-    [I, D, _, _, _, _, _, _, _, _, D, I],
-    [I, _, I, I, I, I, _, I, I, I, _, I],
-    [I, _, I, U, _, _, _, _, S, I, _, I],
-    [I, _, _, T, _, I, I, _, T, _, _, I],
-    [I, _, I, S, _, _, _, _, U, I, _, I],
-    [I, _, I, I, I, _, I, I, I, I, _, I],
-    [I, D, _, _, _, _, _, _, _, _, D, I],
-    [I, I, I, I, _, E, E, _, I, I, I, I],
+    [I, W, _, _, _, _, W, I],
+    [I, _, I, N, G, I, _, I],
+    [I, _, W, _, _, W, _, I],
+    [_, _, _, D, U, _, _, _],
+    [I, _, W, _, _, W, _, I],
+    [I, _, I, G, N, I, _, I],
+    [I, W, _, E, E, _, W, I],
+    [_, D, _, S, S, _, D, _],
+    [_, _, G, _, _, G, _, _],
   ],
 };

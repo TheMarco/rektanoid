@@ -7,6 +7,7 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { GAME_WIDTH, GAME_HEIGHT } from './constants';
 import { createCRTPass } from './CRTPass';
 import type { BrickDefinition } from './types/BrickDefinition';
+import type { BossDefinition } from './types/BossTypes';
 
 const HW = GAME_WIDTH / 2;
 const HH = GAME_HEIGHT / 2;
@@ -67,16 +68,16 @@ const LEVEL_THEMES: {
   bloomRadius: number;
   exposure: number;
 }[] = [
-  { bg: 0x010a06, fog: 0x021a0c, accent: 0x00ff88, fogDensity: 0.0013, bloomStrength: 0.55, bloomRadius: 0.50, exposure: 1.25 }, // Genesis Block
-  { bg: 0x010a06, fog: 0x021a0c, accent: 0x00ff88, fogDensity: 0.0012, bloomStrength: 0.58, bloomRadius: 0.52, exposure: 1.25 }, // Bull Trap
-  { bg: 0x0a0204, fog: 0x1a0508, accent: 0xff2222, fogDensity: 0.0015, bloomStrength: 0.62, bloomRadius: 0.54, exposure: 1.22 }, // Liquidation
-  { bg: 0x0a0800, fog: 0x1a1000, accent: 0xffaa00, fogDensity: 0.0013, bloomStrength: 0.58, bloomRadius: 0.52, exposure: 1.28 }, // Pump & Dump
-  { bg: 0x020810, fog: 0x041420, accent: 0x44ddff, fogDensity: 0.0014, bloomStrength: 0.58, bloomRadius: 0.52, exposure: 1.26 }, // Diamond
-  { bg: 0x0a0204, fog: 0x1a0508, accent: 0xff2222, fogDensity: 0.0015, bloomStrength: 0.65, bloomRadius: 0.56, exposure: 1.20 }, // Bear Market
-  { bg: 0x060804, fog: 0x0c1008, accent: 0xffaa00, fogDensity: 0.0013, bloomStrength: 0.55, bloomRadius: 0.50, exposure: 1.25 }, // Halving
-  { bg: 0x020810, fog: 0x041420, accent: 0x44ddff, fogDensity: 0.0014, bloomStrength: 0.62, bloomRadius: 0.54, exposure: 1.24 }, // DeFi Maze
-  { bg: 0x0a0204, fog: 0x1a0508, accent: 0xff2222, fogDensity: 0.0016, bloomStrength: 0.68, bloomRadius: 0.56, exposure: 1.20 }, // Margin Call
-  { bg: 0x060210, fog: 0x0c0420, accent: 0x8844ff, fogDensity: 0.0014, bloomStrength: 0.65, bloomRadius: 0.54, exposure: 1.27 }, // Flippening
+  { bg: 0x010a06, fog: 0x021a0c, accent: 0x00ff88, fogDensity: 0.0013, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.15 }, // Genesis Block
+  { bg: 0x010a06, fog: 0x021a0c, accent: 0x00ff88, fogDensity: 0.0012, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.15 }, // Bull Trap
+  { bg: 0x0a0204, fog: 0x1a0508, accent: 0xff2222, fogDensity: 0.0015, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.10 }, // Liquidation
+  { bg: 0x0a0800, fog: 0x1a1000, accent: 0xffaa00, fogDensity: 0.0013, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.15 }, // Pump & Dump
+  { bg: 0x020810, fog: 0x041420, accent: 0x44ddff, fogDensity: 0.0014, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.15 }, // Diamond Hands
+  { bg: 0x0a0204, fog: 0x1a0508, accent: 0xff2222, fogDensity: 0.0015, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.10 }, // Bear Market
+  { bg: 0x060804, fog: 0x0c1008, accent: 0xffaa00, fogDensity: 0.0013, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.15 }, // Halving
+  { bg: 0x020810, fog: 0x041420, accent: 0x44ddff, fogDensity: 0.0014, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.12 }, // DeFi Maze
+  { bg: 0x0a0204, fog: 0x1a0508, accent: 0xff2222, fogDensity: 0.0016, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.10 }, // Margin Call
+  { bg: 0x060210, fog: 0x0c0420, accent: 0x8844ff, fogDensity: 0.0014, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.15 }, // Flippening
 ];
 
 export class Renderer {
@@ -94,6 +95,7 @@ export class Renderer {
   private calloutsEl: HTMLElement;
   private tickerEl: HTMLElement;
   private particles: Particle[] = [];
+  private tempEffects: { group: THREE.Group; expiresAt: number }[] = [];
 
   // 2D canvas HUD rendered via separate scene (goes through CRT)
   private hudCanvas: HTMLCanvasElement;
@@ -105,10 +107,15 @@ export class Renderer {
     score: number; lives: number; combo: number;
     sentiment: string; sentimentColor: string;
     stage: string; effects: string;
+    eventLabel?: string;
+    bossName?: string | null;
+    bossHp?: number | null;
+    riskLabel?: string;
+    riskColor?: string;
   } | null = null;
   private tickerData: { sym: string; price: number; pct: number }[] = [];
   private tickerOffset = 0;
-  private activeCallouts: { text: string; color: string; size: number; gx: number; gy: number; startTime: number }[] = [];
+  private activeCallouts: { text: string; color: string; size: number; gx: number; gy: number; startTime: number; quick: boolean }[] = [];
   private overlayHtml: string | null = null;
 
   constructor(container: HTMLElement) {
@@ -120,7 +127,7 @@ export class Renderer {
     this.scene.background = new THREE.Color(initialTheme.bg);
     this.scene.fog = new THREE.FogExp2(initialTheme.fog, initialTheme.fogDensity);
 
-    // Camera: see 800x600 area at z=0
+    // Camera: see 450x800 area at z=0
     const fov = 60;
     const aspect = GAME_WIDTH / GAME_HEIGHT;
     this.camera = new THREE.PerspectiveCamera(fov, aspect, 1, 2000);
@@ -137,8 +144,8 @@ export class Renderer {
 
     // 2D canvas HUD (rendered in separate scene, goes through bloom + CRT)
     this.hudCanvas = document.createElement('canvas');
-    this.hudCanvas.width = 2048;
-    this.hudCanvas.height = 1536;
+    this.hudCanvas.width = 1152;
+    this.hudCanvas.height = 2048;
     this.hudCtx = this.hudCanvas.getContext('2d')!;
     this.hudTexture = new THREE.CanvasTexture(this.hudCanvas);
     this.hudTexture.minFilter = THREE.LinearFilter;
@@ -337,6 +344,97 @@ export class Renderer {
         const na = ((s + 1) / segs) * Math.PI * 2;
         positions.push(Math.cos(a) * r, Math.sin(a) * r, d, Math.cos(na) * r, Math.sin(na) * r, d);
       }
+    } else if (def.id === 'fomo') {
+      // Hourglass shape — time is running out
+      positions.push(-hw * 0.5, -hh * 0.6, d, hw * 0.5, -hh * 0.6, d); // top bar
+      positions.push(-hw * 0.5, hh * 0.6, d, hw * 0.5, hh * 0.6, d);   // bottom bar
+      positions.push(-hw * 0.5, -hh * 0.6, d, hw * 0.5, hh * 0.6, d);  // X cross
+      positions.push(hw * 0.5, -hh * 0.6, d, -hw * 0.5, hh * 0.6, d);
+      // Sand dots in bottom half
+      positions.push(-hw * 0.1, hh * 0.15, d, hw * 0.1, hh * 0.15, d);
+      positions.push(-hw * 0.15, hh * 0.35, d, hw * 0.15, hh * 0.35, d);
+    } else if (def.id === 'stable') {
+      // Dollar sign circle — stablecoin
+      const r = Math.min(hw, hh) * 0.5;
+      const segs = 10;
+      for (let s = 0; s < segs; s++) {
+        const a = (s / segs) * Math.PI * 2;
+        const na = ((s + 1) / segs) * Math.PI * 2;
+        positions.push(Math.cos(a) * r, Math.sin(a) * r, d, Math.cos(na) * r, Math.sin(na) * r, d);
+      }
+      // $ sign: S-curve + vertical line
+      positions.push(0, -hh * 0.55, d, 0, hh * 0.55, d); // vertical bar
+      positions.push(hw * 0.2, -hh * 0.25, d, -hw * 0.2, 0, d);  // top curve
+      positions.push(-hw * 0.2, 0, d, hw * 0.2, hh * 0.25, d);    // bottom curve
+    } else if (def.id === 'leverage') {
+      // Arrow pointing up with multiplier lines
+      positions.push(0, -hh * 0.6, d, 0, hh * 0.4, d);           // shaft
+      positions.push(-hw * 0.3, -hh * 0.1, d, 0, -hh * 0.6, d); // left head
+      positions.push(hw * 0.3, -hh * 0.1, d, 0, -hh * 0.6, d);  // right head
+      // x2 indicator bars
+      positions.push(-hw * 0.5, hh * 0.3, d, -hw * 0.15, hh * 0.3, d);
+      positions.push(hw * 0.15, hh * 0.3, d, hw * 0.5, hh * 0.3, d);
+    } else if (def.id === 'rug') {
+      // Trapdoor/carpet pattern — pulling away
+      positions.push(-hw * 0.6, 0, d, hw * 0.6, 0, d);
+      positions.push(-hw * 0.5, -hh * 0.4, d, -hw * 0.15, -hh * 0.3, d);
+      positions.push(-hw * 0.15, -hh * 0.3, d, hw * 0.15, -hh * 0.4, d);
+      positions.push(hw * 0.15, -hh * 0.4, d, hw * 0.5, -hh * 0.3, d);
+      positions.push(-hw * 0.5, hh * 0.3, d, -hw * 0.15, hh * 0.4, d);
+      positions.push(-hw * 0.15, hh * 0.4, d, hw * 0.15, hh * 0.3, d);
+      positions.push(hw * 0.15, hh * 0.3, d, hw * 0.5, hh * 0.4, d);
+    } else if (def.id === 'whale') {
+      // Whale silhouette — rounded body with tail
+      const r = Math.min(hw, hh) * 0.55;
+      const segs = 8;
+      // Body arc (top half)
+      for (let s = 0; s < segs; s++) {
+        const a1 = Math.PI + (s / segs) * Math.PI;
+        const a2 = Math.PI + ((s + 1) / segs) * Math.PI;
+        positions.push(Math.cos(a1) * r * 1.2, Math.sin(a1) * r * 0.8, d,
+                       Math.cos(a2) * r * 1.2, Math.sin(a2) * r * 0.8, d);
+      }
+      // Body bottom
+      positions.push(-r * 1.2, 0, d, r * 0.8, 0, d);
+      // Tail fin
+      positions.push(r * 0.8, 0, d, hw * 0.7, -hh * 0.5, d);
+      positions.push(r * 0.8, 0, d, hw * 0.7, hh * 0.3, d);
+      // Eye dot
+      positions.push(-hw * 0.3, hh * 0.15, d, -hw * 0.2, hh * 0.15, d);
+    } else if (def.id === 'influencer') {
+      // Megaphone / broadcast shape
+      // Cone opening to the right
+      positions.push(-hw * 0.3, -hh * 0.15, d, -hw * 0.3, hh * 0.15, d);  // mouth
+      positions.push(-hw * 0.3, -hh * 0.15, d, hw * 0.5, -hh * 0.5, d);   // top edge
+      positions.push(-hw * 0.3, hh * 0.15, d, hw * 0.5, hh * 0.5, d);     // bottom edge
+      positions.push(hw * 0.5, -hh * 0.5, d, hw * 0.5, hh * 0.5, d);      // front
+      // Sound waves
+      for (let w = 0; w < 3; w++) {
+        const wOff = hw * (0.15 + w * 0.15);
+        const wH = hh * (0.2 + w * 0.12);
+        positions.push(hw * 0.5 + wOff, -wH, d, hw * 0.5 + wOff + hw * 0.05, 0, d);
+        positions.push(hw * 0.5 + wOff + hw * 0.05, 0, d, hw * 0.5 + wOff, wH, d);
+      }
+      // Handle
+      positions.push(-hw * 0.5, -hh * 0.08, d, -hw * 0.3, -hh * 0.08, d);
+      positions.push(-hw * 0.5, hh * 0.08, d, -hw * 0.3, hh * 0.08, d);
+    } else if (def.id === 'diamond') {
+      // Diamond / gem shape — octagonal cut
+      const dw = hw * 0.6, dh = hh * 0.7;
+      // Top facet
+      positions.push(-dw * 0.5, -dh, d, dw * 0.5, -dh, d);        // flat top
+      positions.push(-dw, -dh * 0.3, d, -dw * 0.5, -dh, d);       // top-left
+      positions.push(dw * 0.5, -dh, d, dw, -dh * 0.3, d);         // top-right
+      // Middle widest
+      positions.push(-dw, -dh * 0.3, d, -dw, dh * 0.1, d);        // left
+      positions.push(dw, -dh * 0.3, d, dw, dh * 0.1, d);          // right
+      // Bottom point
+      positions.push(-dw, dh * 0.1, d, 0, dh, d);                 // bottom-left
+      positions.push(dw, dh * 0.1, d, 0, dh, d);                  // bottom-right
+      // Inner facet lines
+      positions.push(-dw * 0.5, -dh, d, -dw * 0.3, dh * 0.1, d);
+      positions.push(dw * 0.5, -dh, d, dw * 0.3, dh * 0.1, d);
+      positions.push(0, -dh, d, 0, dh, d);                         // center line
     }
 
     const geo = new THREE.BufferGeometry();
@@ -456,11 +554,100 @@ export class Renderer {
     return group;
   }
 
-  updateBrickDamage(group: THREE.Group, hp: number, maxHp: number) {
+  updateBrickDamage(group: THREE.Group, hp: number, maxHp: number, shake = true) {
     const ratio = hp / maxHp;
+    if (ratio >= 1) return; // no damage, nothing to do
+
     const core = group.children[0] as THREE.LineSegments;
-    const mat = core.material as THREE.LineBasicMaterial;
-    mat.opacity = 0.4 + ratio * 0.5;
+    const coreMat = core.material as THREE.LineBasicMaterial;
+    const fill = group.children[1] as THREE.Mesh;
+    const fillMat = fill.material as THREE.MeshBasicMaterial;
+    const glow = group.children[2] as THREE.LineSegments;
+    const glowMat = glow.material as THREE.LineBasicMaterial;
+
+    const damage = 1 - ratio; // 0 = full HP, 1 = nearly dead
+
+    // 1. Color shift: lerp toward warning red as damage increases
+    const baseColor = new THREE.Color(coreMat.color.getHex());
+    const warnColor = new THREE.Color(0xff4444);
+    const lerpedColor = baseColor.lerp(warnColor, damage * 0.6);
+    coreMat.color.copy(lerpedColor);
+    fillMat.color.copy(lerpedColor);
+    glowMat.color.copy(lerpedColor);
+
+    // 2. Core opacity: slight dim
+    coreMat.opacity = 0.4 + ratio * 0.5;
+
+    // 3. Glow ramp: damaged bricks "leak energy"
+    glowMat.opacity = 0.07 + damage * 0.18;
+
+    // 4. Fill gets brighter as brick is about to break
+    fillMat.opacity = 0.03 + damage * 0.06;
+
+    // 5. Add crack lines (only once per damage level)
+    const crackKey = `_cracks_${hp}`;
+    if (!(group.userData as Record<string, boolean>)[crackKey]) {
+      (group.userData as Record<string, boolean>)[crackKey] = true;
+      this.addCrackLines(group, damage);
+    }
+
+    // 6. Shake on hit
+    if (shake) {
+      const shakeAmount = 1.5 + damage * 2;
+      const origX = group.position.x;
+      const origY = group.position.y;
+      group.position.x += (Math.random() - 0.5) * shakeAmount;
+      group.position.y += (Math.random() - 0.5) * shakeAmount;
+      setTimeout(() => {
+        group.position.x = origX;
+        group.position.y = origY;
+      }, 80);
+    }
+  }
+
+  private addCrackLines(group: THREE.Group, damage: number) {
+    // Get brick dimensions from geometry's local bounding box (not world-space)
+    const core = group.children[0] as THREE.LineSegments;
+    core.geometry.computeBoundingBox();
+    const box = core.geometry.boundingBox!;
+    const hw = (box.max.x - box.min.x) / 2;
+    const hh = (box.max.y - box.min.y) / 2;
+    const d = 3; // front face z
+
+    const positions: number[] = [];
+    const numCracks = damage > 0.6 ? 4 : damage > 0.3 ? 3 : 2;
+
+    for (let c = 0; c < numCracks; c++) {
+      // Start from a random edge point
+      const edge = Math.floor(Math.random() * 4);
+      let sx: number, sy: number;
+      if (edge === 0) { sx = -hw + Math.random() * hw * 2; sy = -hh; }
+      else if (edge === 1) { sx = hw; sy = -hh + Math.random() * hh * 2; }
+      else if (edge === 2) { sx = -hw + Math.random() * hw * 2; sy = hh; }
+      else { sx = -hw; sy = -hh + Math.random() * hh * 2; }
+
+      // Zigzag toward center with 2-3 segments
+      let cx = sx, cy = sy;
+      const segs = 2 + Math.floor(Math.random() * 2);
+      for (let s = 0; s < segs; s++) {
+        const t = (s + 1) / segs;
+        const nx = sx * (1 - t) + (Math.random() - 0.5) * hw * 0.6;
+        const ny = sy * (1 - t) + (Math.random() - 0.5) * hh * 0.6;
+        positions.push(cx, cy, d, nx, ny, d);
+        cx = nx;
+        cy = ny;
+      }
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    const crackMesh = new THREE.LineSegments(geo,
+      new THREE.LineBasicMaterial({
+        color: 0xffffff, transparent: true, opacity: 0.3 + damage * 0.3,
+        fog: false, toneMapped: false,
+      }));
+    crackMesh.renderOrder = 6;
+    group.add(crackMesh);
   }
 
   makePaddle(w: number, h: number): THREE.Group {
@@ -596,7 +783,7 @@ export class Renderer {
         depthTest: false, depthWrite: false,
         fog: false, toneMapped: false,
       }));
-    outerGlow.scale.setScalar(1.4);
+    outerGlow.scale.setScalar(1.3);
     outerGlow.renderOrder = 5;
     group.add(outerGlow);
 
@@ -604,7 +791,7 @@ export class Renderer {
   }
 
   makeBallTrail(): THREE.Mesh {
-    const maxPts = 60;
+    const maxPts = 20;
     // Triangle strip: 2 verts per point = maxPts*2 verts
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(maxPts * 2 * 3), 3));
@@ -654,7 +841,7 @@ export class Renderer {
     const alpha = alphaAttr.array as Float32Array;
     const indices: number[] = [];
 
-    const maxWidth = 8; // widest point near the ball
+    const maxWidth = 2.5; // widest point near the ball
 
     for (let i = 0; i < count; i++) {
       const t = count > 1 ? i / (count - 1) : 0; // 0=tail, 1=head
@@ -833,36 +1020,431 @@ export class Renderer {
     return group;
   }
 
+  // ── Boss mesh ──
+
+  makeBossMesh(def: BossDefinition): THREE.Group {
+    const group = new THREE.Group();
+    const hw = def.width / 2, hh = def.height / 2;
+    const d = 4;
+
+    const positions: number[] = [];
+
+    // Outer hull
+    positions.push(-hw, -hh, d, hw, -hh, d);
+    positions.push(hw, -hh, d, hw, hh, d);
+    positions.push(hw, hh, d, -hw, hh, d);
+    positions.push(-hw, hh, d, -hw, -hh, d);
+    // Back
+    positions.push(-hw, -hh, -d, hw, -hh, -d);
+    positions.push(hw, -hh, -d, hw, hh, -d);
+    positions.push(hw, hh, -d, -hw, hh, -d);
+    positions.push(-hw, hh, -d, -hw, -hh, -d);
+    // Connecting
+    positions.push(-hw, -hh, d, -hw, -hh, -d);
+    positions.push(hw, -hh, d, hw, -hh, -d);
+    positions.push(hw, hh, d, hw, hh, -d);
+    positions.push(-hw, hh, d, -hw, hh, -d);
+
+    // Boss-specific inner detail
+    if (def.id === 'whale') {
+      // Whale silhouette - large curved body
+      const segs = 10;
+      for (let i = 0; i < segs; i++) {
+        const t1 = i / segs, t2 = (i + 1) / segs;
+        const x1 = -hw * 0.8 + t1 * hw * 1.6;
+        const x2 = -hw * 0.8 + t2 * hw * 1.6;
+        const y1 = Math.sin(t1 * Math.PI) * hh * 0.5;
+        const y2 = Math.sin(t2 * Math.PI) * hh * 0.5;
+        positions.push(x1, y1, d, x2, y2, d);
+        positions.push(x1, -y1 * 0.3, d, x2, -y2 * 0.3, d);
+      }
+      // Tail
+      positions.push(hw * 0.7, 0, d, hw * 0.9, hh * 0.4, d);
+      positions.push(hw * 0.7, 0, d, hw * 0.9, -hh * 0.4, d);
+      // Eye
+      const eyeR = 3;
+      for (let i = 0; i < 6; i++) {
+        const a1 = (i / 6) * Math.PI * 2, a2 = ((i + 1) / 6) * Math.PI * 2;
+        positions.push(
+          -hw * 0.5 + Math.cos(a1) * eyeR, hh * 0.15 + Math.sin(a1) * eyeR, d,
+          -hw * 0.5 + Math.cos(a2) * eyeR, hh * 0.15 + Math.sin(a2) * eyeR, d
+        );
+      }
+    } else if (def.id === 'liquidator') {
+      // Angular machine - crosshairs and warning lines
+      positions.push(-hw * 0.6, 0, d, hw * 0.6, 0, d);
+      positions.push(0, -hh * 0.6, d, 0, hh * 0.6, d);
+      // Crosshair circle
+      const cr = Math.min(hw, hh) * 0.4;
+      for (let i = 0; i < 8; i++) {
+        const a1 = (i / 8) * Math.PI * 2, a2 = ((i + 1) / 8) * Math.PI * 2;
+        positions.push(Math.cos(a1) * cr, Math.sin(a1) * cr, d, Math.cos(a2) * cr, Math.sin(a2) * cr, d);
+      }
+      // Warning chevrons
+      positions.push(-hw * 0.7, -hh * 0.3, d, -hw * 0.5, 0, d);
+      positions.push(-hw * 0.5, 0, d, -hw * 0.7, hh * 0.3, d);
+      positions.push(hw * 0.7, -hh * 0.3, d, hw * 0.5, 0, d);
+      positions.push(hw * 0.5, 0, d, hw * 0.7, hh * 0.3, d);
+    } else if (def.id === 'flippening') {
+      // Dual form - split down the middle
+      positions.push(0, -hh, d, 0, hh, d);
+      // Left half - bull horn
+      positions.push(-hw * 0.6, hh * 0.3, d, -hw * 0.3, -hh * 0.5, d);
+      positions.push(-hw * 0.3, -hh * 0.5, d, -hw * 0.15, -hh * 0.7, d);
+      // Right half - bear claw
+      positions.push(hw * 0.3, hh * 0.3, d, hw * 0.6, 0, d);
+      positions.push(hw * 0.6, 0, d, hw * 0.5, -hh * 0.3, d);
+      positions.push(hw * 0.6, 0, d, hw * 0.7, -hh * 0.3, d);
+      // Inner diamond
+      const dr = Math.min(hw, hh) * 0.3;
+      positions.push(0, -dr, d, dr, 0, d);
+      positions.push(dr, 0, d, 0, dr, d);
+      positions.push(0, dr, d, -dr, 0, d);
+      positions.push(-dr, 0, d, 0, -dr, d);
+    }
+
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    const thickGeo = thickenGeo(geo, 0.08, 2);
+
+    const core = new THREE.LineSegments(thickGeo,
+      new THREE.LineBasicMaterial({
+        color: def.color, transparent: true, opacity: 0.6,
+        fog: false, toneMapped: false,
+      }));
+    core.renderOrder = 6;
+    group.add(core);
+
+    // Fill
+    const fill = new THREE.Mesh(
+      new THREE.PlaneGeometry(def.width - 4, def.height - 4),
+      new THREE.MeshBasicMaterial({
+        color: def.color, transparent: true, opacity: 0.04,
+        side: THREE.DoubleSide,
+      }));
+    group.add(fill);
+
+    // Glow
+    const glow = new THREE.LineSegments(thickGeo.clone(),
+      new THREE.LineBasicMaterial({
+        color: def.color, transparent: true, opacity: 0.2,
+        blending: THREE.AdditiveBlending,
+        depthTest: false, depthWrite: false,
+        fog: false, toneMapped: false,
+      }));
+    glow.scale.setScalar(1.06);
+    glow.renderOrder = 5;
+    group.add(glow);
+
+    return group;
+  }
+
   // ── Effects ──
 
   burst(gx: number, gy: number, color: number, count: number = 24) {
     const [wx, wy] = [gx - HW, HH - gy];
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2 + Math.random() * 0.5;
-      const speed = 120 + Math.random() * 200;
+      const speed = 140 + Math.random() * 250;
       this.particles.push({
         x: wx, y: wy, z: 0,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        vz: (Math.random() - 0.5) * 80,
+        vz: (Math.random() - 0.5) * 100,
         life: 1,
-        decay: 1.0 + Math.random() * 1.2,
+        decay: 0.9 + Math.random() * 1.0,
         color,
-        size: 3 + Math.random() * 5,
+        size: 5 + Math.random() * 7,
       });
     }
   }
 
   shards(gx: number, gy: number, color: number) {
-    this.burst(gx, gy, color, 35);
-    this.flash(color, 0.3);
+    const [wx, wy] = [gx - HW, HH - gy];
+    const c = new THREE.Color(color);
+
+    // 1. Thick shockwave ring — built from real geometry so bloom picks it up
+    const ringGroup = new THREE.Group();
+    ringGroup.position.set(wx, wy, 4);
+    ringGroup.renderOrder = 997;
+    const ringSegs = 36;
+    const ringRadius = 1; // unit circle, scaled up over time
+    const ringVerts: number[] = [];
+    for (let i = 0; i < ringSegs; i++) {
+      const a1 = (i / ringSegs) * Math.PI * 2;
+      const a2 = ((i + 1) / ringSegs) * Math.PI * 2;
+      const x1 = Math.cos(a1) * ringRadius, y1 = Math.sin(a1) * ringRadius;
+      const x2 = Math.cos(a2) * ringRadius, y2 = Math.sin(a2) * ringRadius;
+      // Thicken: offset perpendicular to segment
+      const dx = x2 - x1, dy = y2 - y1;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      const nx = -dy / len * 0.08, ny = dx / len * 0.08;
+      ringVerts.push(x1 + nx, y1 + ny, 0, x2 + nx, y2 + ny, 0);
+      ringVerts.push(x1 - nx, y1 - ny, 0, x2 - nx, y2 - ny, 0);
+      ringVerts.push(x1, y1, 0, x2, y2, 0);
+    }
+    const ringGeo = new THREE.BufferGeometry();
+    ringGeo.setAttribute('position', new THREE.Float32BufferAttribute(ringVerts, 3));
+    const ringMat = new THREE.LineBasicMaterial({
+      color: new THREE.Color(color).multiplyScalar(3.0),
+      transparent: true, opacity: 0.9,
+      blending: THREE.AdditiveBlending, depthTest: false, fog: false, toneMapped: false,
+    });
+    ringGroup.add(new THREE.LineSegments(ringGeo, ringMat));
+    this.fxGroup.add(ringGroup);
+    const ringStart = performance.now();
+    const ringUpdate = () => {
+      const t = (performance.now() - ringStart) / 450;
+      if (t >= 1) {
+        this.fxGroup.remove(ringGroup); ringGeo.dispose(); return;
+      }
+      ringGroup.scale.setScalar(8 + t * 50);
+      ringMat.opacity = 0.9 * (1 - t) * (1 - t);
+      requestAnimationFrame(ringUpdate);
+    };
+    requestAnimationFrame(ringUpdate);
+
+    // 2. Hot sparks — mix of white-hot and colored
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2 + Math.random() * 0.6;
+      const speed = 120 + Math.random() * 200;
+      const isWhite = Math.random() < 0.5;
+      this.particles.push({
+        x: wx, y: wy, z: Math.random() * 3,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        vz: (Math.random() - 0.5) * 60,
+        life: 1, decay: 0.6 + Math.random() * 0.5,
+        color: isWhite ? 0xffffff : color,
+        size: 14 + Math.random() * 12,
+        hot: true,
+      });
+    }
+
+    // 3. Particle burst — mix of colored and white
+    for (let i = 0; i < 35; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 100 + Math.random() * 260;
+      this.particles.push({
+        x: wx + (Math.random() - 0.5) * 6,
+        y: wy + (Math.random() - 0.5) * 6,
+        z: 0,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        vz: (Math.random() - 0.5) * 80,
+        life: 1, decay: 0.6 + Math.random() * 0.8,
+        color: Math.random() < 0.3 ? 0xffffff : color,
+        size: 4 + Math.random() * 7,
+      });
+    }
+
+    // 4. Spinning debris chunks — HDR bright
+    for (let i = 0; i < 5; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 80 + Math.random() * 180;
+      const len = 5 + Math.random() * 10;
+      const debrisGeo = new THREE.BufferGeometry();
+      debrisGeo.setAttribute('position', new THREE.Float32BufferAttribute([-len, 0, 0, len, 0, 0], 3));
+      const debrisColor = new THREE.Color().lerpColors(c, new THREE.Color(0xffffff), Math.random() * 0.5).multiplyScalar(2.0);
+      const debrisMat = new THREE.LineBasicMaterial({
+        color: debrisColor,
+        transparent: true, opacity: 1.0,
+        blending: THREE.AdditiveBlending, depthTest: false, fog: false, toneMapped: false,
+      });
+      const debris = new THREE.LineSegments(debrisGeo, debrisMat);
+      debris.position.set(wx, wy, 3);
+      debris.renderOrder = 200;
+      this.fxGroup.add(debris);
+
+      const dvx = Math.cos(angle) * speed;
+      const dvy = Math.sin(angle) * speed;
+      const spin = (Math.random() - 0.5) * 14;
+      const debrisStart = performance.now();
+      const debrisUpdate = () => {
+        const elapsed = (performance.now() - debrisStart) / 1000;
+        if (elapsed > 0.9) { this.fxGroup.remove(debris); debrisGeo.dispose(); return; }
+        debris.position.x = wx + dvx * elapsed;
+        debris.position.y = wy + dvy * elapsed - 50 * elapsed * elapsed;
+        debris.rotation.z += spin * (1 / 60);
+        debrisMat.opacity = 1.0 * Math.max(0, 1 - elapsed / 0.9);
+        requestAnimationFrame(debrisUpdate);
+      };
+      requestAnimationFrame(debrisUpdate);
+    }
+
+    // 5. Subtle screen flash
+    this.flash(color, 0.2);
+  }
+
+  /** Big cinematic explosion for explosive bricks — shockwave, debris, sparks, embers */
+  explosion(gx: number, gy: number, color: number) {
+    const [wx, wy] = [gx - HW, HH - gy];
+    const c = new THREE.Color(color);
+
+    // 1. Expanding shockwave ring
+    const ringGeo = new THREE.BufferGeometry();
+    const ringSegs = 48;
+    const ringPos = new Float32Array(ringSegs * 2 * 3);
+    for (let i = 0; i < ringSegs; i++) {
+      const a1 = (i / ringSegs) * Math.PI * 2;
+      const a2 = ((i + 1) / ringSegs) * Math.PI * 2;
+      ringPos[i * 6] = Math.cos(a1); ringPos[i * 6 + 1] = Math.sin(a1); ringPos[i * 6 + 2] = 0;
+      ringPos[i * 6 + 3] = Math.cos(a2); ringPos[i * 6 + 4] = Math.sin(a2); ringPos[i * 6 + 5] = 0;
+    }
+    ringGeo.setAttribute('position', new THREE.Float32BufferAttribute(ringPos, 3));
+    const ringMat = new THREE.LineBasicMaterial({
+      color, transparent: true, opacity: 0.8,
+      blending: THREE.AdditiveBlending, depthTest: false, fog: false, toneMapped: false,
+    });
+    const ring = new THREE.LineSegments(ringGeo, ringMat);
+    ring.position.set(wx, wy, 4);
+    ring.renderOrder = 997;
+    this.fxGroup.add(ring);
+    // Second ring slightly delayed
+    const ring2 = ring.clone();
+    (ring2.material as THREE.LineBasicMaterial) = ringMat.clone();
+    ring2.position.set(wx, wy, 4);
+    this.fxGroup.add(ring2);
+    const ringStart = performance.now();
+    const ringUpdate = () => {
+      const elapsed = performance.now() - ringStart;
+      // Ring 1
+      const t1 = elapsed / 500;
+      if (t1 < 1) {
+        ring.scale.setScalar(10 + t1 * 120);
+        ringMat.opacity = 0.8 * (1 - t1) * (1 - t1);
+      }
+      // Ring 2 (delayed 80ms, smaller)
+      const t2 = (elapsed - 80) / 400;
+      if (t2 > 0 && t2 < 1) {
+        ring2.scale.setScalar(8 + t2 * 80);
+        (ring2.material as THREE.LineBasicMaterial).opacity = 0.5 * (1 - t2) * (1 - t2);
+      }
+      if (elapsed < 600) {
+        requestAnimationFrame(ringUpdate);
+      } else {
+        this.fxGroup.remove(ring); ring.geometry.dispose();
+        this.fxGroup.remove(ring2); ring2.geometry.dispose();
+      }
+    };
+    requestAnimationFrame(ringUpdate);
+
+    // 3. Primary burst — fast bright particles
+    for (let i = 0; i < 40; i++) {
+      const angle = (i / 40) * Math.PI * 2 + Math.random() * 0.4;
+      const speed = 200 + Math.random() * 350;
+      this.particles.push({
+        x: wx + (Math.random() - 0.5) * 8,
+        y: wy + (Math.random() - 0.5) * 8,
+        z: Math.random() * 5,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        vz: (Math.random() - 0.5) * 120,
+        life: 1,
+        decay: 0.8 + Math.random() * 0.8,
+        color: 0xffffff,
+        size: 4 + Math.random() * 6,
+      });
+    }
+
+    // 4. Colored spark burst
+    for (let i = 0; i < 50; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 100 + Math.random() * 280;
+      this.particles.push({
+        x: wx, y: wy, z: 0,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        vz: (Math.random() - 0.5) * 100,
+        life: 1,
+        decay: 0.6 + Math.random() * 1.0,
+        color,
+        size: 2 + Math.random() * 5,
+      });
+    }
+
+    // 5. Delayed secondary sparks (fire trail effect)
+    setTimeout(() => {
+      for (let i = 0; i < 25; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 60 + Math.random() * 150;
+        // Mix between the brick color and orange/yellow for fire
+        const fireColors = [color, 0xff6600, 0xffaa00, 0xffdd44];
+        this.particles.push({
+          x: wx + (Math.random() - 0.5) * 30,
+          y: wy + (Math.random() - 0.5) * 30,
+          z: Math.random() * 3,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed + 40, // slight upward bias
+          vz: (Math.random() - 0.5) * 40,
+          life: 1,
+          decay: 0.7 + Math.random() * 0.6,
+          color: fireColors[Math.floor(Math.random() * fireColors.length)],
+          size: 3 + Math.random() * 4,
+        });
+      }
+    }, 60);
+
+    // 6. Slow embers that float upward
+    for (let i = 0; i < 15; i++) {
+      this.particles.push({
+        x: wx + (Math.random() - 0.5) * 20,
+        y: wy + (Math.random() - 0.5) * 20,
+        z: 0,
+        vx: (Math.random() - 0.5) * 40,
+        vy: 30 + Math.random() * 60,  // float up
+        vz: (Math.random() - 0.5) * 20,
+        life: 1,
+        decay: 0.3 + Math.random() * 0.3, // long-lived
+        color: 0xff4400,
+        size: 4 + Math.random() * 6,
+      });
+    }
+
+    // 7. Spinning debris chunks (line segment objects)
+    for (let i = 0; i < 8; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 80 + Math.random() * 200;
+      const len = 5 + Math.random() * 12;
+      const debrisGeo = new THREE.BufferGeometry();
+      debrisGeo.setAttribute('position', new THREE.Float32BufferAttribute([-len, 0, 0, len, 0, 0], 3));
+      const debrisMat = new THREE.LineBasicMaterial({
+        color: new THREE.Color().lerpColors(c, new THREE.Color(0xffffff), Math.random() * 0.5),
+        transparent: true, opacity: 0.9,
+        blending: THREE.AdditiveBlending, depthTest: false, fog: false, toneMapped: false,
+      });
+      const debris = new THREE.LineSegments(debrisGeo, debrisMat);
+      debris.position.set(wx, wy, 3);
+      debris.renderOrder = 200;
+      this.fxGroup.add(debris);
+
+      const dvx = Math.cos(angle) * speed;
+      const dvy = Math.sin(angle) * speed;
+      const spin = (Math.random() - 0.5) * 15;
+      const debrisStart = performance.now();
+      const debrisUpdate = () => {
+        const elapsed = (performance.now() - debrisStart) / 1000;
+        if (elapsed > 1.2) { this.fxGroup.remove(debris); debrisGeo.dispose(); return; }
+        debris.position.x = wx + dvx * elapsed;
+        debris.position.y = wy + dvy * elapsed - 50 * elapsed * elapsed; // gravity
+        debris.rotation.z += spin * (1 / 60);
+        debrisMat.opacity = 0.9 * Math.max(0, 1 - elapsed / 1.2);
+        requestAnimationFrame(debrisUpdate);
+      };
+      requestAnimationFrame(debrisUpdate);
+    }
+
+    // 8. Intense screen flash (stronger than normal)
+    this.flash(color, 0.6);
+    // Second flash delayed — the afterglow
+    setTimeout(() => this.flash(0xff6600, 0.2), 80);
   }
 
   flash(color: number, intensity: number = 1) {
     const flashMesh = new THREE.Mesh(
       new THREE.PlaneGeometry(GAME_WIDTH * 2, GAME_HEIGHT * 2),
       new THREE.MeshBasicMaterial({
-        color, transparent: true, opacity: intensity * 0.3,
+        color, transparent: true, opacity: intensity * 0.04,
         blending: THREE.AdditiveBlending,
         side: THREE.DoubleSide,
         depthTest: false,
@@ -872,9 +1454,9 @@ export class Renderer {
     this.fxGroup.add(flashMesh);
     const start = performance.now();
     const update = () => {
-      const t = (performance.now() - start) / 300;
+      const t = (performance.now() - start) / 350;
       if (t >= 1) { this.fxGroup.remove(flashMesh); flashMesh.geometry.dispose(); return; }
-      (flashMesh.material as THREE.MeshBasicMaterial).opacity = intensity * 0.3 * (1 - t);
+      (flashMesh.material as THREE.MeshBasicMaterial).opacity = intensity * 0.04 * (1 - t);
       requestAnimationFrame(update);
     };
     requestAnimationFrame(update);
@@ -900,6 +1482,62 @@ export class Renderer {
 
   private particleMesh: THREE.Points | null = null;
 
+  private particleShaderMat: THREE.ShaderMaterial | null = null;
+
+  private getParticleShader(): THREE.ShaderMaterial {
+    if (!this.particleShaderMat) {
+      this.particleShaderMat = new THREE.ShaderMaterial({
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthTest: false,
+        depthWrite: false,
+        toneMapped: false,
+        vertexShader: `
+          attribute float size;
+          attribute float hot;
+          varying vec3 vColor;
+          varying float vHot;
+          void main() {
+            vColor = color;
+            vHot = hot;
+            vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+            gl_PointSize = size * (400.0 / -mvPos.z);
+            gl_Position = projectionMatrix * mvPos;
+          }
+        `,
+        fragmentShader: `
+          varying vec3 vColor;
+          varying float vHot;
+          void main() {
+            float d = length(gl_PointCoord - vec2(0.5));
+            if (d > 0.5) discard;
+            float alpha;
+            vec3 col;
+            if (vHot > 0.5) {
+              // Tight blazing white core
+              float core = 1.0 - smoothstep(0.0, 0.1, d);
+              // Mid glow ring
+              float mid = 1.0 - smoothstep(0.0, 0.25, d);
+              // Outer soft halo
+              float outer = 1.0 - smoothstep(0.0, 0.5, d);
+              // White-hot center bleeding into color
+              vec3 white = vec3(1.0);
+              col = mix(vColor, white, core * 0.9 + mid * 0.3);
+              col *= (1.0 + core * 8.0 + mid * 2.0);
+              alpha = outer * 0.7 + mid * 0.3;
+            } else {
+              alpha = 1.0 - smoothstep(0.2, 0.5, d);
+              col = vColor;
+            }
+            gl_FragColor = vec4(col, alpha);
+          }
+        `,
+        vertexColors: true,
+      });
+    }
+    return this.particleShaderMat;
+  }
+
   private rebuildParticleMesh() {
     if (this.particleMesh) {
       this.fxGroup.remove(this.particleMesh);
@@ -911,40 +1549,184 @@ export class Renderer {
       return;
     }
 
-    const positions = new Float32Array(this.particles.length * 3);
-    const colors = new Float32Array(this.particles.length * 3);
-    const sizes = new Float32Array(this.particles.length);
+    const n = this.particles.length;
+    const positions = new Float32Array(n * 3);
+    const colors = new Float32Array(n * 3);
+    const sizes = new Float32Array(n);
+    const hots = new Float32Array(n);
     const color = new THREE.Color();
 
-    for (let i = 0; i < this.particles.length; i++) {
+    for (let i = 0; i < n; i++) {
       const p = this.particles[i];
       positions[i * 3] = p.x;
       positions[i * 3 + 1] = p.y;
       positions[i * 3 + 2] = p.z;
       color.setHex(p.color);
-      colors[i * 3] = color.r * p.life;
-      colors[i * 3 + 1] = color.g * p.life;
-      colors[i * 3 + 2] = color.b * p.life;
-      sizes[i] = p.size * p.life;
+      const hdr = (p.hot ? 6.0 : 2.0) * p.life;
+      colors[i * 3] = color.r * hdr;
+      colors[i * 3 + 1] = color.g * hdr;
+      colors[i * 3 + 2] = color.b * hdr;
+      sizes[i] = p.size * (p.hot ? (0.5 + p.life * 0.5) : (0.3 + p.life * 0.7));
+      hots[i] = p.hot ? 1.0 : 0.0;
     }
 
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     geo.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1));
+    geo.setAttribute('hot', new THREE.Float32BufferAttribute(hots, 1));
 
-    this.particleMesh = new THREE.Points(geo,
-      new THREE.PointsMaterial({
-        size: 3,
-        vertexColors: true,
-        transparent: true,
-        opacity: 0.8,
-        blending: THREE.AdditiveBlending,
-        depthTest: false,
-        sizeAttenuation: true,
-      }));
+    this.particleMesh = new THREE.Points(geo, this.getParticleShader());
     this.particleMesh.renderOrder = 100;
     this.fxGroup.add(this.particleMesh);
+  }
+
+  // ── Temp Effects ──
+  addTempEffect(group: THREE.Group, durationMs: number) {
+    this.fxGroup.add(group);
+    this.tempEffects.push({ group, expiresAt: performance.now() + durationMs });
+  }
+
+  updateTempEffects() {
+    const now = performance.now();
+    for (let i = this.tempEffects.length - 1; i >= 0; i--) {
+      if (now >= this.tempEffects[i].expiresAt) {
+        this.fxGroup.remove(this.tempEffects[i].group);
+        this.disposeObject3D(this.tempEffects[i].group);
+        this.tempEffects.splice(i, 1);
+      }
+    }
+  }
+
+  // ── Boss Attack Visuals ──
+
+  /** Liquidation beam: tall glowing vertical line from boss to screen bottom */
+  createBeamMesh(color: number = 0xff2222): THREE.Group {
+    const group = new THREE.Group();
+
+    // Core beam — tall narrow plane
+    const beamGeo = new THREE.PlaneGeometry(8, GAME_HEIGHT);
+    const beamMat = new THREE.MeshBasicMaterial({
+      color, transparent: true, opacity: 0.5,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      depthTest: false, depthWrite: false,
+    });
+    const beam = new THREE.Mesh(beamGeo, beamMat);
+    beam.renderOrder = 50;
+    group.add(beam);
+
+    // Edge glow lines
+    for (const xOff of [-6, 6]) {
+      const edgeGeo = new THREE.BufferGeometry();
+      edgeGeo.setAttribute('position', new THREE.Float32BufferAttribute([
+        xOff, -GAME_HEIGHT / 2, 0,
+        xOff, GAME_HEIGHT / 2, 0,
+      ], 3));
+      const edgeMat = new THREE.LineBasicMaterial({
+        color, transparent: true, opacity: 0.3,
+        blending: THREE.AdditiveBlending,
+        depthTest: false,
+      });
+      const edge = new THREE.LineSegments(edgeGeo, edgeMat);
+      edge.renderOrder = 50;
+      group.add(edge);
+    }
+
+    return group;
+  }
+
+  updateBeam(group: THREE.Group, gx: number, intensity: number) {
+    const wp = this.toWorld(gx, GAME_HEIGHT / 2);
+    group.position.set(wp.x, wp.y, 1);
+
+    // Pulse opacity
+    const core = group.children[0] as THREE.Mesh;
+    (core.material as THREE.MeshBasicMaterial).opacity = 0.3 + intensity * 0.4;
+    for (let i = 1; i < group.children.length; i++) {
+      const edge = group.children[i] as THREE.LineSegments;
+      (edge.material as THREE.LineBasicMaterial).opacity = 0.2 + intensity * 0.3;
+    }
+  }
+
+  /** Column strike warning: flashing vertical rectangle outline */
+  drawColumnWarning(gx: number, width: number, progress: number, color: number = 0xff4400) {
+    const hw = width / 2;
+    const hh = GAME_HEIGHT / 2;
+    const positions = [
+      -hw, -hh, 0, hw, -hh, 0,
+      hw, -hh, 0, hw, hh, 0,
+      hw, hh, 0, -hw, hh, 0,
+      -hw, hh, 0, -hw, -hh, 0,
+    ];
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    const mat = new THREE.LineBasicMaterial({
+      color, transparent: true,
+      opacity: 0.15 + Math.sin(progress * Math.PI * 8) * 0.15,
+      blending: THREE.AdditiveBlending,
+      depthTest: false,
+    });
+    const mesh = new THREE.LineSegments(geo, mat);
+    mesh.renderOrder = 45;
+    const wp = this.toWorld(gx, GAME_HEIGHT / 2);
+    mesh.position.set(wp.x, wp.y, 1);
+    const group = new THREE.Group();
+    group.add(mesh);
+    this.addTempEffect(group, 50);
+  }
+
+  /** Gravity swell: concentric expanding rings around a point */
+  drawGravityField(gx: number, gy: number, radius: number, progress: number, color: number = 0x0088ff) {
+    const group = new THREE.Group();
+    const wp = this.toWorld(gx, gy);
+    group.position.set(wp.x, wp.y, 1);
+
+    for (let ring = 0; ring < 3; ring++) {
+      const ringProgress = (progress + ring * 0.33) % 1.0;
+      const r = radius * ringProgress;
+      const segs = 24;
+      const positions: number[] = [];
+      for (let s = 0; s < segs; s++) {
+        const a1 = (s / segs) * Math.PI * 2;
+        const a2 = ((s + 1) / segs) * Math.PI * 2;
+        positions.push(Math.cos(a1) * r, Math.sin(a1) * r, 0);
+        positions.push(Math.cos(a2) * r, Math.sin(a2) * r, 0);
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      const mat = new THREE.LineBasicMaterial({
+        color, transparent: true,
+        opacity: 0.25 * (1 - ringProgress),
+        blending: THREE.AdditiveBlending,
+        depthTest: false,
+      });
+      const mesh = new THREE.LineSegments(geo, mat);
+      mesh.renderOrder = 45;
+      group.add(mesh);
+    }
+
+    this.addTempEffect(group, 50); // single frame, redrawn each frame
+  }
+
+  /** Telegraph indicator: pulsing line from boss toward target */
+  drawTelegraphLine(fromGx: number, fromGy: number, toGx: number, toGy: number, color: number, progress: number) {
+    const from = this.toWorld(fromGx, fromGy);
+    const to = this.toWorld(toGx, toGy);
+    const positions = [from.x, from.y, 1, to.x, to.y, 1];
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    const opacity = 0.2 + Math.sin(progress * Math.PI * 6) * 0.2;
+    const mat = new THREE.LineBasicMaterial({
+      color, transparent: true, opacity,
+      blending: THREE.AdditiveBlending,
+      depthTest: false,
+    });
+    const mesh = new THREE.LineSegments(geo, mat);
+    mesh.renderOrder = 44;
+    const group = new THREE.Group();
+    group.add(mesh);
+    this.addTempEffect(group, 50);
   }
 
   // ── Background ──
@@ -1045,14 +1827,19 @@ export class Renderer {
     }
   }
 
-  showCallout(gx: number, gy: number, text: string, color: string, size: number = 18) {
-    this.activeCallouts.push({ text, color, size: size * 2.5, gx, gy, startTime: performance.now() });
+  showCallout(gx: number, gy: number, text: string, color: string, size: number = 18, quick: boolean = false) {
+    this.activeCallouts.push({ text, color, size: size * 1.0, gx, gy, startTime: performance.now(), quick });
   }
 
   updateHUD(data: {
     score: number; lives: number; combo: number;
     sentiment: string; sentimentColor: string;
     stage: string; effects: string;
+    eventLabel?: string;
+    bossName?: string | null;
+    bossHp?: number | null;
+    riskLabel?: string;
+    riskColor?: string;
   }) {
     this.hudData = data;
   }
@@ -1083,7 +1870,7 @@ export class Renderer {
 
     // ── Ticker tape (top) ──
     if (this.tickerData.length > 0) {
-      const tickerH = 56 * sy;
+      const tickerH = 36 * sy;
       ctx.fillStyle = 'rgba(0, 2, 8, 0.6)';
       ctx.fillRect(0, 0, W, tickerH);
 
@@ -1091,7 +1878,7 @@ export class Renderer {
       ctx.rect(0, 0, W, tickerH);
       ctx.clip();
 
-      const fontSize = Math.round(32 * sy);
+      const fontSize = Math.round(22 * sy);
       ctx.font = `bold ${fontSize}px "Courier New", monospace`;
       ctx.textBaseline = 'middle';
 
@@ -1129,90 +1916,137 @@ export class Renderer {
       ctx.restore();
     }
 
-    // ── HUD (bottom) ──
+    // ── HUD (bottom) — two-row layout for portrait ──
     if (this.hudData) {
       const d = this.hudData;
       const bagValue = '$' + (d.score * 100 + 10000).toLocaleString();
       const pnl = d.score > 0 ? `+${(d.score * 0.8).toFixed(0)}%` : '0%';
       const pnlColor = d.score > 0 ? '#009966' : '#666666';
       const hodl = '\u25C6'.repeat(d.lives);
-      const comboText = d.combo >= 5 ? `x${d.combo} MEGA PUMP`
+      const comboText = d.combo >= 5 ? `x${d.combo} MEGA`
         : d.combo >= 3 ? `x${d.combo} PUMP`
         : d.combo > 1 ? `x${d.combo}` : '';
 
-      // HUD background bar
-      const hudBarH = 52 * sy;
+      // HUD background bar (taller for two rows)
+      const hudBarH = 55 * sy;
       ctx.fillStyle = 'rgba(0, 2, 8, 0.5)';
       ctx.fillRect(0, H - hudBarH, W, hudBarH);
 
-      const hudY = H - 14 * sy;
-      const bigFont = Math.round(36 * sy);
-      const medFont = Math.round(28 * sy);
-      const smallFont = Math.round(22 * sy);
-      let hx = 14 * sx;
+      const medFont = Math.round(18 * sy);
+      const smallFont = Math.round(14 * sy);
+      const pad = 10 * sx;
 
-      // Bag value
-      ctx.font = `bold ${bigFont}px "Courier New", monospace`;
-      ctx.fillStyle = '#009966';
+      // Row 1: bag value, PnL, lives
+      const row1Y = H - 32 * sy;
+      let hx = pad;
       ctx.textBaseline = 'bottom';
-      ctx.fillText(bagValue, hx, hudY);
-      hx += ctx.measureText(bagValue).width + 12 * sx;
 
-      // PnL
       ctx.font = `bold ${medFont}px "Courier New", monospace`;
+      ctx.fillStyle = '#009966';
+      ctx.fillText(bagValue, hx, row1Y);
+      hx += ctx.measureText(bagValue).width + 8 * sx;
+
       ctx.fillStyle = pnlColor;
-      ctx.fillText(pnl, hx, hudY);
-      hx += ctx.measureText(pnl).width + 14 * sx;
+      ctx.fillText(pnl, hx, row1Y);
+      hx += ctx.measureText(pnl).width + 8 * sx;
 
-      // Lives
-      ctx.font = `${medFont}px "Courier New", monospace`;
       ctx.fillStyle = '#3399bb';
-      ctx.fillText(hodl, hx, hudY);
-      hx += ctx.measureText(hodl).width + 14 * sx;
+      ctx.fillText(hodl, hx, row1Y);
 
-      // Combo
-      if (comboText) {
-        ctx.font = `bold ${medFont}px "Courier New", monospace`;
-        ctx.fillStyle = '#bb8800';
-        ctx.fillText(comboText, hx, hudY);
-        hx += ctx.measureText(comboText).width + 14 * sx;
+      // Risk label + stage name (right side, row 1)
+      ctx.font = `${smallFont}px "Courier New", monospace`;
+      let rightX = W - pad;
+      ctx.fillStyle = '#445566';
+      const stageW = ctx.measureText(d.stage).width;
+      ctx.fillText(d.stage, rightX - stageW, row1Y);
+      if (d.riskLabel) {
+        const riskText = ` [${d.riskLabel}]`;
+        ctx.fillStyle = d.riskColor || '#666';
+        const riskW = ctx.measureText(riskText).width;
+        ctx.fillText(riskText, rightX - stageW - riskW, row1Y);
       }
 
-      // Sentiment
+      // Row 2: combo, sentiment, effects, event label
+      const row2Y = H - 8 * sy;
+      hx = pad;
+
+      if (comboText) {
+        ctx.font = `bold ${smallFont}px "Courier New", monospace`;
+        ctx.fillStyle = '#bb8800';
+        ctx.fillText(comboText, hx, row2Y);
+        hx += ctx.measureText(comboText).width + 8 * sx;
+      }
+
       ctx.font = `bold ${smallFont}px "Courier New", monospace`;
       ctx.fillStyle = d.sentimentColor;
-      ctx.fillText(d.sentiment, hx, hudY);
-      hx += ctx.measureText(d.sentiment).width + 14 * sx;
+      ctx.fillText(d.sentiment, hx, row2Y);
+      hx += ctx.measureText(d.sentiment).width + 8 * sx;
 
-      // Effects
       if (d.effects) {
         ctx.font = `${smallFont}px "Courier New", monospace`;
         ctx.fillStyle = '#3399bb';
-        ctx.fillText(d.effects, hx, hudY);
+        ctx.fillText(d.effects, hx, row2Y);
       }
 
-      // Stage name (right side)
-      ctx.font = `${smallFont}px "Courier New", monospace`;
-      ctx.fillStyle = '#445566';
-      const stageW = ctx.measureText(d.stage).width;
-      ctx.fillText(d.stage, W - stageW - 14 * sx, hudY);
+      // Event label (right side, row 2)
+      if (d.eventLabel) {
+        ctx.font = `bold ${smallFont}px "Courier New", monospace`;
+        ctx.fillStyle = '#cc4444';
+        const eventW = ctx.measureText(d.eventLabel).width;
+        ctx.fillText(d.eventLabel, W - eventW - pad, row2Y);
+      }
+
+      // Boss HP bar (top area, below ticker)
+      if (d.bossName && d.bossHp != null) {
+        const barW = W * 0.6;
+        const barH = 14 * sy;
+        const barX = (W - barW) / 2;
+        const barY = 62 * sy;
+
+        // Boss name
+        ctx.font = `bold ${smallFont}px "Courier New", monospace`;
+        ctx.fillStyle = '#cc4444';
+        ctx.textAlign = 'center';
+        ctx.fillText(d.bossName, W / 2, barY - 6 * sy);
+        ctx.textAlign = 'left';
+
+        // Bar background
+        ctx.fillStyle = 'rgba(80, 0, 0, 0.5)';
+        ctx.fillRect(barX, barY, barW, barH);
+
+        // HP fill
+        const hpFill = Math.max(0, Math.min(1, d.bossHp));
+        const hpColor = hpFill > 0.5 ? '#cc4444' : hpFill > 0.25 ? '#cc6622' : '#cc2222';
+        ctx.fillStyle = hpColor;
+        ctx.fillRect(barX, barY, barW * hpFill, barH);
+
+        // Bar border
+        ctx.strokeStyle = '#662222';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(barX, barY, barW, barH);
+      }
     }
 
     // ── Callouts ──
     const now = performance.now();
-    this.activeCallouts = this.activeCallouts.filter(c => now - c.startTime < 1200);
+    this.activeCallouts = this.activeCallouts.filter(c => {
+      const dur = c.quick ? 600 : 1000;
+      return now - c.startTime < dur;
+    });
     for (const c of this.activeCallouts) {
-      const t = (now - c.startTime) / 1200; // 0→1
-      const alpha = t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4;
-      const yOff = t * -80 * sy;
-      const scale = t < 0.6 ? 1 + t * 0.25 : 1.15 - (t - 0.6) * 0.875;
+      const dur = c.quick ? 600 : 1000;
+      const t = (now - c.startTime) / dur; // 0→1
+      const peakAlpha = c.quick ? 0.7 : 0.9;
+      const alpha = (t < 0.3 ? peakAlpha : peakAlpha * (1 - (t - 0.3) / 0.7));
+      const yOff = t * (c.quick ? -30 : -50) * sy;
+      const scale = c.quick ? 1.0 : (t < 0.3 ? 1 + t * 0.15 : 1.045 - (t - 0.3) * 0.2);
 
       ctx.save();
       const cx = c.gx * sx;
       const cy = c.gy * sy + yOff;
       ctx.translate(cx, cy);
       ctx.scale(scale, scale);
-      ctx.globalAlpha = alpha;
+      ctx.globalAlpha = Math.max(0, alpha);
       ctx.font = `bold ${c.size * sy}px "Courier New", monospace`;
       ctx.fillStyle = c.color;
       ctx.textAlign = 'center';
@@ -1287,4 +2121,5 @@ interface Particle {
   vx: number; vy: number; vz: number;
   life: number; decay: number;
   color: number; size: number;
+  hot?: boolean; // renders with glowing core + soft falloff like the ball
 }

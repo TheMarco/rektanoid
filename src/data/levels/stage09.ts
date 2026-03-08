@@ -8,9 +8,10 @@ const D = 'drop';
 const R = 'sentimentDown';
 const I = 'indestructible';
 const Z = 'hazard';
+const G = 'rug';
 const _ = null;
 
-// Skull/danger pattern — tight grid with hazards everywhere
+// Skull/danger pattern — tight grid with hazards and rug pulls
 export const stage09: LevelDefinition = {
   id: 'stage09',
   name: 'Margin Call',
@@ -18,14 +19,13 @@ export const stage09: LevelDefinition = {
   speedMultiplier: 1.35,
   allowedPowerups: null,
   layout: [
-    [_, _, H, H, H, H, H, H, H, H, _, _],
-    [_, H, Z, H, T, T, T, T, H, Z, H, _],
-    [H, H, _, H, T, _, _, T, H, _, H, H],
-    [H, T, _, _, T, T, T, T, _, _, T, H],
-    [H, T, T, _, _, _, _, _, _, T, T, H],
-    [H, _, T, _, H, _, _, H, _, T, _, H],
-    [_, H, T, T, _, D, D, _, T, T, H, _],
-    [_, _, H, T, T, E, E, T, T, H, _, _],
-    [_, _, _, H, H, R, R, H, H, _, _, _],
+    [_, H, H, H, H, H, H, _],
+    [H, Z, H, T, T, H, Z, H],
+    [H, _, H, G, G, H, _, H],
+    [H, T, _, _, _, _, T, H],
+    [H, T, _, H, H, _, T, H],
+    [H, _, T, _, _, T, _, H],
+    [_, H, T, D, D, T, H, _],
+    [_, _, H, E, E, H, _, _],
   ],
 };
