@@ -164,10 +164,13 @@ export class Game {
     window.addEventListener('keydown', e => {
       this.keys[e.code] = true;
 
-      // Any key during menu starts the game
+      // Space/Enter during menu starts the game with selected risk
       if (this.state === 'menu' && (e.code === 'Space' || e.code === 'Enter')) {
         audio.init();
         audio.resume();
+        const selectedId = this.r.getSelectedRiskId();
+        const selected = RISK_PROFILES.find(p => p.id === selectedId);
+        if (selected) this.riskProfile = selected;
         audio.menuSelect();
         this.startGame();
         return;
@@ -226,10 +229,23 @@ export class Game {
       if (this.state === 'playing') this.useMouseControl = true;
     });
 
-    window.addEventListener('mousedown', () => {
+    window.addEventListener('mousedown', (e) => {
       if (this.state === 'menu') {
+        // Check if a risk button was clicked
+        const [gx, gy] = this.r.screenToGame(e.clientX, e.clientY);
+        const hitRisk = this.r.hitTestOverlay(gx, gy);
+        if (hitRisk) {
+          const profile = RISK_PROFILES.find(p => p.id === hitRisk);
+          if (profile) this.riskProfile = profile;
+          audio.menuSelect();
+          return; // Don't start game, just select risk
+        }
         audio.init();
         audio.resume();
+        // Apply selected risk profile before starting
+        const selectedId = this.r.getSelectedRiskId();
+        const selected = RISK_PROFILES.find(p => p.id === selectedId);
+        if (selected) this.riskProfile = selected;
         audio.menuSelect();
         this.startGame();
       } else if (this.state === 'playing') {
@@ -243,16 +259,29 @@ export class Game {
     window.addEventListener('touchstart', e => {
       const touch = e.touches[0];
       if (touch) {
-        const [gx] = this.r.screenToGame(touch.clientX, touch.clientY);
+        const [gx, gy] = this.r.screenToGame(touch.clientX, touch.clientY);
         this.mouseX = gx;
         this.useMouseControl = true;
+
+        if (this.state === 'menu') {
+          const hitRisk = this.r.hitTestOverlay(gx, gy);
+          if (hitRisk) {
+            const profile = RISK_PROFILES.find(p => p.id === hitRisk);
+            if (profile) this.riskProfile = profile;
+            audio.menuSelect();
+            return;
+          }
+          audio.init();
+          audio.resume();
+          const selectedId = this.r.getSelectedRiskId();
+          const selected = RISK_PROFILES.find(p => p.id === selectedId);
+          if (selected) this.riskProfile = selected;
+          audio.menuSelect();
+          this.startGame();
+          return;
+        }
       }
-      if (this.state === 'menu') {
-        audio.init();
-        audio.resume();
-        audio.menuSelect();
-        this.startGame();
-      } else if (this.state === 'playing') {
+      if (this.state === 'playing') {
         this.launchBall();
       } else if (this.state === 'game-over' || this.state === 'victory') {
         audio.menuSelect();
@@ -277,61 +306,13 @@ export class Game {
     this.r.setLevelTheme(0);
     const bg = buildBackground(this.r, 0);
     this.r.bgGroup.add(bg);
-    this.r.showOverlay(`
-      <div style="text-align:center;background:radial-gradient(ellipse at center, rgba(0,10,8,0.9) 0%, rgba(0,4,6,0.95) 100%);width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center">
-        <h1 style="color:#00ff88;font-size:42px;font-family:monospace;text-shadow:0 0 30px #00ff88, 0 0 60px #00ff88;margin-bottom:6px;letter-spacing:4px">REKTANOID</h1>
-        <p style="color:#44ddff;font-size:12px;font-family:monospace;margin-bottom:2px">BREAK BLOCKS. PUMP BAGS. GET REKT.</p>
-        <p style="color:#334455;font-size:10px;font-family:monospace;margin-bottom:20px">NFA &bull; DYOR &bull; WAGMI</p>
-        <p style="color:#888;font-size:10px;font-family:monospace;margin-bottom:12px">Arrow keys / Mouse to move &bull; Space / Click to launch</p>
-        <p style="color:#666;font-size:11px;font-family:monospace;margin-bottom:10px">SELECT LEVERAGE:</p>
-        <div style="display:flex;gap:10px;justify-content:center;margin-bottom:16px">
-          ${RISK_PROFILES.map(p => `
-            <button data-risk="${p.id}" style="
-              background:transparent;border:1px solid ${p.color};color:${p.color};
-              font-family:monospace;font-size:13px;padding:8px 14px;cursor:pointer;
-              text-shadow:0 0 10px ${p.color};box-shadow:0 0 8px ${p.color}40;
-              transition:all 0.2s;
-            " onmouseover="this.style.background='${p.color}20'" onmouseout="this.style.background='transparent'">
-              <div style="font-size:16px;font-weight:bold">${p.label}</div>
-              <div style="font-size:9px;opacity:0.7">${p.name}</div>
-            </button>
-          `).join('')}
-        </div>
-        <p style="color:#888;font-size:10px;font-family:monospace;margin-bottom:14px" id="risk-desc">${RISK_PROFILES[1].description}</p>
-        <p style="color:#ffaa00;font-size:14px;font-family:monospace;animation:pulse 1.5s infinite">APE IN (SPACE / CLICK)</p>
-      </div>
-    `);
-
-    // Attach risk button listeners
-    setTimeout(() => {
-      const buttons = document.querySelectorAll('[data-risk]');
-      buttons.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const riskId = (btn as HTMLElement).dataset.risk;
-          const profile = RISK_PROFILES.find(p => p.id === riskId);
-          if (profile) {
-            this.riskProfile = profile;
-            const desc = document.getElementById('risk-desc');
-            if (desc) desc.textContent = profile.description;
-            // Highlight selected
-            buttons.forEach(b => {
-              (b as HTMLElement).style.borderWidth = '1px';
-              (b as HTMLElement).style.transform = 'scale(1)';
-            });
-            (btn as HTMLElement).style.borderWidth = '2px';
-            (btn as HTMLElement).style.transform = 'scale(1.1)';
-          }
-          audio.menuSelect();
-        });
-      });
-      // Default select middle
-      const defaultBtn = document.querySelector('[data-risk="margin"]') as HTMLElement;
-      if (defaultBtn) {
-        defaultBtn.style.borderWidth = '2px';
-        defaultBtn.style.transform = 'scale(1.1)';
-      }
-    }, 50);
+    this.r.setOverlayScreen({
+      type: 'menu',
+      riskProfiles: RISK_PROFILES.map(p => ({
+        id: p.id, label: p.label, name: p.name,
+        description: p.description, color: p.color,
+      })),
+    });
   }
 
   private startGame() {
@@ -399,16 +380,15 @@ export class Game {
     if (!level) return;
 
     const stageMeta = STAGE_META[this.currentLevel];
-    const bossInfo = stageMeta?.bossId ? ` // BOSS: ${stageMeta.bossId.toUpperCase()}` : '';
+    const bossInfo = stageMeta?.bossId ? `// BOSS: ${stageMeta.bossId.toUpperCase()}` : undefined;
 
     this.state = 'stage-intro';
-    this.r.showOverlay(`
-      <div style="text-align:center;pointer-events:none">
-        <h2 style="color:#00ff88;font-size:28px;font-family:monospace;text-shadow:0 0 30px #00ff88, 0 0 60px #00ff88">${level.name.toUpperCase()}</h2>
-        <p style="color:#44ddff;font-size:14px;font-family:monospace;margin-top:8px;text-shadow:0 0 15px #44ddff">${level.flavorText}</p>
-        ${bossInfo ? `<p style="color:#ff4444;font-size:12px;font-family:monospace;margin-top:12px;text-shadow:0 0 10px #ff4444">${bossInfo}</p>` : ''}
-      </div>
-    `);
+    this.r.setOverlayScreen({
+      type: 'stage-intro',
+      name: level.name.toUpperCase(),
+      flavorText: level.flavorText,
+      bossInfo,
+    });
 
     setTimeout(() => {
       if (this.state === 'stage-intro') {
@@ -421,12 +401,7 @@ export class Game {
   private togglePause() {
     if (this.state === 'playing') {
       this.state = 'paused';
-      this.r.showOverlay(`
-        <div style="text-align:center;background:rgba(0,4,6,0.8);width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center">
-          <h2 style="color:#44ddff;font-size:28px;font-family:monospace;text-shadow:0 0 20px #44ddff">PAUSED</h2>
-          <p style="color:#888;font-size:14px;font-family:monospace;margin-top:12px">Press ESC to resume</p>
-        </div>
-      `);
+      this.r.setOverlayScreen({ type: 'paused' });
     } else if (this.state === 'paused') {
       this.state = 'playing';
       this.r.hideOverlay();
@@ -446,16 +421,11 @@ export class Game {
     audio.stopMusic();
     audio.gameOver();
     const bagVal = (this.score * 100 + 10000).toLocaleString();
-    this.r.showOverlay(`
-      <div style="text-align:center;background:radial-gradient(ellipse at center, rgba(10,0,0,0.85) 0%, rgba(4,0,2,0.95) 100%);width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center">
-        <h2 style="color:#ff2222;font-size:42px;font-family:monospace;text-shadow:0 0 30px #ff2222, 0 0 60px #ff2222">LIQUIDATED</h2>
-        <p style="color:#ff4444;font-size:14px;font-family:monospace;margin:8px 0">BAGS LIQUIDATED</p>
-        <p style="color:#ffaa00;font-size:22px;font-family:monospace;margin:8px 0">$${bagVal}</p>
-        <p style="color:#ff4444;font-size:12px;font-family:monospace">-99.7% NGMI</p>
-        <p style="color:#555;font-size:12px;font-family:monospace;margin-top:8px">Stage ${this.currentLevel + 1} of ${LEVEL_ORDER.length}</p>
-        <p style="color:#44ddff;font-size:14px;font-family:monospace;margin-top:20px;animation:pulse 1.5s infinite">PRESS SPACE TO APE BACK IN</p>
-      </div>
-    `);
+    this.r.setOverlayScreen({
+      type: 'game-over',
+      bagValue: bagVal,
+      stageText: `Stage ${this.currentLevel + 1} of ${LEVEL_ORDER.length}`,
+    });
   }
 
   private victory() {
@@ -466,16 +436,14 @@ export class Game {
     const moonVal = (this.score * 100 + 10000).toLocaleString();
     const returnPct = (this.score * 0.8).toFixed(0);
     const rp = this.riskProfile;
-    this.r.showOverlay(`
-      <div style="text-align:center;background:radial-gradient(ellipse at center, rgba(10,8,0,0.85) 0%, rgba(4,3,0,0.95) 100%);width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center">
-        <h2 style="color:#ffaa00;font-size:42px;font-family:monospace;text-shadow:0 0 30px #ffaa00, 0 0 60px #ffaa00">CYCLE TOP CALLED</h2>
-        <p style="color:#00ff88;font-size:14px;font-family:monospace;margin:8px 0">BAGS MOONED</p>
-        <p style="color:#00ff88;font-size:26px;font-family:monospace;margin:8px 0">$${moonVal}</p>
-        <p style="color:#00ff88;font-size:14px;font-family:monospace">+${returnPct}% UNREALIZED GAINS</p>
-        <p style="color:${rp.color};font-size:12px;font-family:monospace;margin-top:8px">${rp.label} ${rp.name} MODE</p>
-        <p style="color:#44ddff;font-size:14px;font-family:monospace;margin-top:16px;animation:pulse 1.5s infinite">PRESS SPACE TO APE BACK IN</p>
-      </div>
-    `);
+    this.r.setOverlayScreen({
+      type: 'victory',
+      moonValue: moonVal,
+      returnPct,
+      riskLabel: rp.label,
+      riskColor: rp.color,
+      riskName: rp.name,
+    });
   }
 
   // ── Paddle ──
@@ -1158,10 +1126,7 @@ export class Game {
     }
 
     if (this.useMouseControl) {
-      const target = clamp(this.mouseX, this.paddleWidth / 2, GAME_WIDTH - this.paddleWidth / 2);
-      const dx = target - this.paddleX;
-      const speed = Math.min(Math.abs(dx) * 10, B.PADDLE_SPEED * 1.5);
-      this.paddleX += Math.sign(dx) * Math.min(speed * dt, Math.abs(dx));
+      this.paddleX = clamp(this.mouseX, this.paddleWidth / 2, GAME_WIDTH - this.paddleWidth / 2);
     } else {
       let vx = 0;
       if (this.keys['ArrowLeft'] || this.keys['KeyA']) vx = -B.PADDLE_SPEED;

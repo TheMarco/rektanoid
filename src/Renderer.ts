@@ -12,6 +12,14 @@ import type { BossDefinition } from './types/BossTypes';
 const HW = GAME_WIDTH / 2;
 const HH = GAME_HEIGHT / 2;
 
+// Canvas overlay screen types (rendered through CRT + bloom)
+type OverlayScreen =
+  | { type: 'menu'; riskProfiles: { id: string; label: string; name: string; description: string; color: string }[] }
+  | { type: 'stage-intro'; name: string; flavorText: string; bossInfo?: string }
+  | { type: 'paused' }
+  | { type: 'game-over'; bagValue: string; stageText: string }
+  | { type: 'victory'; moonValue: string; returnPct: string; riskLabel: string; riskColor: string; riskName: string };
+
 // ── Line thickening (ported from scramble) ──
 // Creates multiple parallel copies of each line segment offset perpendicular,
 // giving wireframes a beefier, more defined look under bloom.
@@ -118,8 +126,20 @@ export class Renderer {
   private activeCallouts: { text: string; color: string; size: number; gx: number; gy: number; startTime: number; quick: boolean }[] = [];
   private overlayHtml: string | null = null;
 
+  // Canvas-based overlay screens (rendered through CRT)
+  private overlayScreen: OverlayScreen | null = null;
+  private riskButtonRects: { id: string; gx: number; gy: number; gw: number; gh: number }[] = [];
+  private selectedRiskId: string = 'margin';
+  private logoImg: HTMLImageElement | null = null;
+  private logoLoaded = false;
+
   constructor(container: HTMLElement) {
     this.container = container;
+
+    // Preload logo
+    this.logoImg = new Image();
+    this.logoImg.onload = () => { this.logoLoaded = true; };
+    this.logoImg.src = 'adstudios.png';
 
     // Scene
     const initialTheme = LEVEL_THEMES[0];
@@ -2332,7 +2352,6 @@ export class Renderer {
     this.overlayHtml = html;
     this.overlayEl.innerHTML = html;
     this.overlayEl.style.display = 'flex';
-    // Ensure overlay is properly positioned
     this.overlayEl.style.position = 'absolute';
     this.overlayEl.style.zIndex = '20';
   }
@@ -2340,6 +2359,49 @@ export class Renderer {
   hideOverlay() {
     this.overlayHtml = null;
     this.overlayEl.style.display = 'none';
+    this.overlayScreen = null;
+    this.riskButtonRects = [];
+  }
+
+  /** Set a canvas-based overlay screen (rendered through CRT) */
+  setOverlayScreen(screen: OverlayScreen) {
+    this.overlayScreen = screen;
+    this.overlayHtml = null;
+    this.overlayEl.style.display = 'none';
+    if (screen.type === 'menu') {
+      this.riskButtonRects = [];
+      this.selectedRiskId = 'margin';
+    }
+  }
+
+  /** Get selected risk profile id */
+  getSelectedRiskId(): string {
+    return this.selectedRiskId;
+  }
+
+  /** Hit-test overlay buttons, returns risk id if a button was clicked, null otherwise */
+  hitTestOverlay(gx: number, gy: number): string | null {
+    for (const btn of this.riskButtonRects) {
+      if (gx >= btn.gx && gx <= btn.gx + btn.gw && gy >= btn.gy && gy <= btn.gy + btn.gh) {
+        this.selectedRiskId = btn.id;
+        return btn.id;
+      }
+    }
+    return null;
+  }
+
+  /** Check if overlay screen is showing */
+  hasOverlayScreen(): boolean {
+    return this.overlayScreen !== null;
+  }
+
+  /** Dim a hex color string by a multiplier (0-1) */
+  private dimColor(hex: string, mult: number): string {
+    const c = hex.replace('#', '');
+    const r = Math.round(parseInt(c.substring(0, 2), 16) * mult);
+    const g = Math.round(parseInt(c.substring(2, 4), 16) * mult);
+    const b = Math.round(parseInt(c.substring(4, 6), 16) * mult);
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
   }
 
   /** Render all HUD/ticker/callouts to the canvas texture */
@@ -2374,11 +2436,11 @@ export class Renderer {
         const sign = c.pct >= 0 ? '+' : '';
         const priceStr = c.price >= 1 ? c.price.toFixed(2) : c.price.toFixed(4);
         const label = `${c.sym} $${priceStr} ${sign}${c.pct.toFixed(1)}%`;
-        const color = c.pct >= 0 ? '#009944' : '#993333';
+        const color = c.pct >= 0 ? '#00ff66' : '#ff5555';
         const w = ctx.measureText(label).width;
         segments.push({ text: label, color, width: w });
         const sepW = ctx.measureText('  |  ').width;
-        segments.push({ text: '  |  ', color: '#334455', width: sepW });
+        segments.push({ text: '  |  ', color: '#557788', width: sepW });
         totalWidth += w + sepW;
       }
 
@@ -2535,7 +2597,581 @@ export class Renderer {
       ctx.restore();
     }
 
+    // ── Canvas Overlay Screens ──
+    if (this.overlayScreen) {
+      this.renderOverlayScreen(ctx, W, H, sx, sy);
+    }
+
     this.hudTexture.needsUpdate = true;
+  }
+
+  /** Render a canvas-based overlay screen */
+  private renderOverlayScreen(ctx: CanvasRenderingContext2D, W: number, H: number, sx: number, sy: number) {
+    const screen = this.overlayScreen!;
+    const now = performance.now();
+
+    // All text uses muted colors (~40-50% brightness) to avoid bloom blowout
+    // The bloom threshold is 0.03 so bright colors explode
+
+    // Helper: draw text that always fits within maxW, shrinking font if needed
+    const fitText = (c: CanvasRenderingContext2D, text: string, x: number, y: number,
+                     maxW: number, fontSize: number, bold: boolean) => {
+      let sz = fontSize;
+      const prefix = bold ? 'bold ' : '';
+      c.font = `${prefix}${sz}px "Courier New", monospace`;
+      while (sz > 8 && c.measureText(text).width > maxW) {
+        sz -= 1;
+        c.font = `${prefix}${sz}px "Courier New", monospace`;
+      }
+      c.fillText(text, x, y);
+    };
+
+    ctx.save();
+
+    switch (screen.type) {
+      case 'menu': {
+        ctx.fillStyle = 'rgba(0, 6, 4, 0.92)';
+        ctx.fillRect(0, 0, W, H);
+
+        const centerX = W / 2;
+        const t = now * 0.001;
+
+        // ── Helper: draw a 2D game brick with wireframe detail ──
+        const drawBrick = (bx: number, by: number, bw: number, bh: number,
+                           color: number, typeId: string, alpha: number) => {
+          const r = (color >> 16) & 0xff;
+          const g = (color >> 8) & 0xff;
+          const b = color & 0xff;
+          // Outer box at ~40%
+          const dr = Math.round(r * 0.40);
+          const dg = Math.round(g * 0.40);
+          const db = Math.round(b * 0.40);
+          const fillCol = `rgb(${dr},${dg},${db})`;
+          // Internal wireframe at ~55%
+          const wr = Math.round(r * 0.55);
+          const wg = Math.round(g * 0.55);
+          const wb = Math.round(b * 0.55);
+          const wireCol = `rgb(${wr},${wg},${wb})`;
+
+          ctx.globalAlpha = alpha * 1.8 > 1 ? 1 : alpha * 1.8;
+          // Dark fill
+          ctx.fillStyle = `rgba(${Math.round(r*0.12)},${Math.round(g*0.12)},${Math.round(b*0.12)},0.7)`;
+          ctx.fillRect(bx, by, bw, bh);
+          // Wireframe outer box
+          ctx.strokeStyle = fillCol;
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(bx, by, bw, bh);
+
+          // Type-specific internal wireframe detail
+          const cx = bx + bw / 2, cy = by + bh / 2;
+          const hw = bw / 2, hh = bh / 2;
+          ctx.strokeStyle = wireCol;
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+
+          if (typeId === 'standard') {
+            // Hash cross
+            ctx.moveTo(cx - hw * 0.4, cy); ctx.lineTo(cx + hw * 0.4, cy);
+            ctx.moveTo(cx, cy - hh * 0.5); ctx.lineTo(cx, cy + hh * 0.5);
+          } else if (typeId === 'tough') {
+            // Double border with corner braces
+            const iw = hw * 0.82, ih = hh * 0.82;
+            ctx.rect(cx - iw, cy - ih, iw * 2, ih * 2);
+            ctx.moveTo(bx, by); ctx.lineTo(cx - iw, cy - ih);
+            ctx.moveTo(bx + bw, by); ctx.lineTo(cx + iw, cy - ih);
+            ctx.moveTo(bx + bw, by + bh); ctx.lineTo(cx + iw, cy + ih);
+            ctx.moveTo(bx, by + bh); ctx.lineTo(cx - iw, cy + ih);
+          } else if (typeId === 'tough3') {
+            // Two nested rects + diamond core
+            for (const s of [0.85, 0.65]) {
+              ctx.rect(cx - hw * s, cy - hh * s, hw * s * 2, hh * s * 2);
+            }
+            const dw = hw * 0.3, dh = hh * 0.35;
+            ctx.moveTo(cx, cy - dh); ctx.lineTo(cx + dw, cy);
+            ctx.lineTo(cx, cy + dh); ctx.lineTo(cx - dw, cy);
+            ctx.closePath();
+          } else if (typeId === 'explosive') {
+            // Star burst
+            for (let i = 0; i < 8; i++) {
+              const a = (i / 8) * Math.PI * 2;
+              const rl = Math.min(hw, hh) * 0.7;
+              ctx.moveTo(cx, cy);
+              ctx.lineTo(cx + Math.cos(a) * rl, cy + Math.sin(a) * rl);
+            }
+            // Warning triangle
+            const ts = Math.min(hw, hh) * 0.35;
+            ctx.moveTo(cx, cy - ts); ctx.lineTo(cx + ts * 0.866, cy + ts * 0.5);
+            ctx.lineTo(cx - ts * 0.866, cy + ts * 0.5); ctx.closePath();
+          } else if (typeId === 'drop') {
+            // Downward chevrons + parachute arc
+            for (let i = 0; i < 2; i++) {
+              const yOff = (i - 0.5) * hh * 0.6;
+              ctx.moveTo(cx - hw * 0.4, cy + yOff + hh * 0.2);
+              ctx.lineTo(cx, cy + yOff);
+              ctx.lineTo(cx + hw * 0.4, cy + yOff + hh * 0.2);
+            }
+          } else if (typeId === 'sentimentUp') {
+            // Green candle: body rect + wicks + up arrow
+            const cbh = bh * 0.28;
+            ctx.rect(cx - hw * 0.7, cy - cbh, hw * 1.4, cbh * 2);
+            ctx.moveTo(cx, by + 1); ctx.lineTo(cx, by + bh - 1); // wick
+            ctx.moveTo(cx, cy - cbh); ctx.lineTo(cx - hw * 0.3, cy);
+            ctx.moveTo(cx, cy - cbh); ctx.lineTo(cx + hw * 0.3, cy);
+          } else if (typeId === 'sentimentDown') {
+            // Red candle: body rect + wicks + down arrow
+            const cbh = bh * 0.28;
+            ctx.rect(cx - hw * 0.7, cy - cbh, hw * 1.4, cbh * 2);
+            ctx.moveTo(cx, by + 1); ctx.lineTo(cx, by + bh - 1);
+            ctx.moveTo(cx, cy + cbh); ctx.lineTo(cx - hw * 0.3, cy);
+            ctx.moveTo(cx, cy + cbh); ctx.lineTo(cx + hw * 0.3, cy);
+          } else if (typeId === 'hazard') {
+            // X mark + circle
+            ctx.moveTo(cx - hw * 0.5, cy - hh * 0.5); ctx.lineTo(cx + hw * 0.5, cy + hh * 0.5);
+            ctx.moveTo(cx + hw * 0.5, cy - hh * 0.5); ctx.lineTo(cx - hw * 0.5, cy + hh * 0.5);
+            ctx.moveTo(cx + Math.min(hw, hh) * 0.45, cy);
+            ctx.arc(cx, cy, Math.min(hw, hh) * 0.45, 0, Math.PI * 2);
+          } else if (typeId === 'fomo') {
+            // Hourglass
+            ctx.moveTo(cx - hw * 0.5, cy - hh * 0.6); ctx.lineTo(cx + hw * 0.5, cy - hh * 0.6);
+            ctx.moveTo(cx - hw * 0.5, cy + hh * 0.6); ctx.lineTo(cx + hw * 0.5, cy + hh * 0.6);
+            ctx.moveTo(cx - hw * 0.5, cy - hh * 0.6); ctx.lineTo(cx + hw * 0.5, cy + hh * 0.6);
+            ctx.moveTo(cx + hw * 0.5, cy - hh * 0.6); ctx.lineTo(cx - hw * 0.5, cy + hh * 0.6);
+          } else if (typeId === 'stable') {
+            // Dollar sign circle
+            ctx.moveTo(cx + Math.min(hw, hh) * 0.5, cy);
+            ctx.arc(cx, cy, Math.min(hw, hh) * 0.5, 0, Math.PI * 2);
+            ctx.moveTo(cx, cy - hh * 0.55); ctx.lineTo(cx, cy + hh * 0.55);
+          } else if (typeId === 'leverage') {
+            // Up arrow
+            ctx.moveTo(cx, cy - hh * 0.6); ctx.lineTo(cx, cy + hh * 0.4);
+            ctx.moveTo(cx - hw * 0.3, cy - hh * 0.1); ctx.lineTo(cx, cy - hh * 0.6);
+            ctx.lineTo(cx + hw * 0.3, cy - hh * 0.1);
+          } else if (typeId === 'rug') {
+            // Trapdoor pattern
+            ctx.moveTo(cx - hw * 0.6, cy); ctx.lineTo(cx + hw * 0.6, cy);
+            ctx.moveTo(cx - hw * 0.5, cy - hh * 0.4); ctx.lineTo(cx, cy - hh * 0.5);
+            ctx.lineTo(cx + hw * 0.5, cy - hh * 0.4);
+            ctx.moveTo(cx - hw * 0.5, cy + hh * 0.4); ctx.lineTo(cx, cy + hh * 0.5);
+            ctx.lineTo(cx + hw * 0.5, cy + hh * 0.4);
+          } else if (typeId === 'whale') {
+            // Whale silhouette arc + tail
+            const wr = Math.min(hw, hh) * 0.55;
+            for (let s = 0; s < 8; s++) {
+              const a1 = Math.PI + (s / 8) * Math.PI;
+              const a2 = Math.PI + ((s + 1) / 8) * Math.PI;
+              ctx.moveTo(cx + Math.cos(a1) * wr * 1.2, cy + Math.sin(a1) * wr * 0.8);
+              ctx.lineTo(cx + Math.cos(a2) * wr * 1.2, cy + Math.sin(a2) * wr * 0.8);
+            }
+            ctx.moveTo(cx - wr * 1.2, cy); ctx.lineTo(cx + wr * 0.8, cy);
+            ctx.moveTo(cx + wr * 0.8, cy); ctx.lineTo(cx + hw * 0.7, cy - hh * 0.5);
+          } else if (typeId === 'influencer') {
+            // Megaphone
+            ctx.moveTo(cx - hw * 0.3, cy - hh * 0.15); ctx.lineTo(cx + hw * 0.5, cy - hh * 0.5);
+            ctx.lineTo(cx + hw * 0.5, cy + hh * 0.5); ctx.lineTo(cx - hw * 0.3, cy + hh * 0.15);
+            ctx.closePath();
+          } else if (typeId === 'diamond') {
+            // Gem octagonal cut
+            const dw = hw * 0.6, dh = hh * 0.7;
+            ctx.moveTo(cx - dw * 0.5, cy - dh); ctx.lineTo(cx + dw * 0.5, cy - dh);
+            ctx.lineTo(cx + dw, cy - dh * 0.3); ctx.lineTo(cx + dw, cy + dh * 0.1);
+            ctx.lineTo(cx, cy + dh); ctx.lineTo(cx - dw, cy + dh * 0.1);
+            ctx.lineTo(cx - dw, cy - dh * 0.3); ctx.closePath();
+            ctx.moveTo(cx, cy - dh); ctx.lineTo(cx, cy + dh);
+          } else if (typeId === 'indestructible') {
+            // Dense grid
+            for (let i = 1; i < 3; i++) {
+              const tx = i / 3;
+              ctx.moveTo(bx + bw * tx, by); ctx.lineTo(bx + bw * tx, by + bh);
+              ctx.moveTo(bx, by + bh * tx); ctx.lineTo(bx + bw, by + bh * tx);
+            }
+          }
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        };
+
+        // ── Brick type data for the field ──
+        const brickDefs: [string, number][] = [
+          ['standard', 0x00ff88], ['tough', 0x00aaff], ['tough3', 0x8844ff],
+          ['explosive', 0xff4400], ['drop', 0xffaa00], ['sentimentUp', 0x00ff44],
+          ['sentimentDown', 0xff2222], ['hazard', 0xff0066], ['fomo', 0x44ff44],
+          ['stable', 0x22cc88], ['leverage', 0xff8800], ['rug', 0x9933ff],
+          ['whale', 0x0066cc], ['influencer', 0xff44cc], ['diamond', 0x88eeff],
+          ['indestructible', 0x444444],
+        ];
+
+        // ── Brick field — real game proportions (50×18 game units, 8 cols) ──
+        const brickW = 50 * sx;
+        const brickH = 18 * sy;
+        const brickGapX = 4 * sx;
+        const cols = 8;
+        const gridW = cols * brickW + (cols - 1) * brickGapX;
+        const gridX0 = (W - gridW) / 2;
+        const rowH = 22 * sy;
+
+        // Layout: brick type indices, -1 = empty
+        // Pattern: scattered half-destroyed field, showcasing different brick types
+        const S=0, T=1, H2=2, E=3, D=4, U=5, R=6, Z=7, F=8, C=9, L=10, G=11, Wh=12, N=13, M=14, I=15;
+        const _=-1;
+        const menuLayout: number[][] = [
+          [ _, S, T, _, M, _, E, _],
+          [ U, _, _, Wh, _, D, _, R],
+          [ _, H2, _, _, _, _, L, _],
+          [ _, _, G, _, _, N, _, _],
+          [ Z, _, _, F, C, _, _, I],
+          [ _, T, _, _, _, _, S, _],
+          [ _, _, E, _, _, H2, _, _],
+        ];
+
+        const fieldTop = 38 * sy;
+        for (let row = 0; row < menuLayout.length; row++) {
+          for (let col = 0; col < cols; col++) {
+            const idx = menuLayout[row][col];
+            if (idx < 0) continue;
+            const bx = gridX0 + col * (brickW + brickGapX);
+            const by = fieldTop + row * rowH;
+            const floatY = Math.sin(t * 0.7 + col * 0.9 + row * 1.1) * 1.5 * sy;
+            const alpha = 0.4 + Math.sin(t * 0.4 + col * 0.5 + row * 0.8) * 0.08;
+            const [typeId, color] = brickDefs[idx];
+            drawBrick(bx, by + floatY, brickW, brickH, color, typeId, alpha);
+          }
+        }
+
+        // ── Title — dark scrim behind so it doesn't fight bricks ──
+        const titleY = fieldTop + menuLayout.length * rowH * 0.45;
+        const titleSize = Math.round(80 * sy);
+        // Scrim: gradient fade behind title so it doesn't look like a rectangle
+        const scrimTop = titleY - titleSize * 0.8;
+        const scrimBot = titleY + titleSize * 0.8;
+        const scrimGrad = ctx.createLinearGradient(0, scrimTop, 0, scrimBot);
+        scrimGrad.addColorStop(0, 'rgba(0, 3, 2, 0)');
+        scrimGrad.addColorStop(0.25, 'rgba(0, 3, 2, 0.8)');
+        scrimGrad.addColorStop(0.5, 'rgba(0, 3, 2, 0.9)');
+        scrimGrad.addColorStop(0.75, 'rgba(0, 3, 2, 0.8)');
+        scrimGrad.addColorStop(1, 'rgba(0, 3, 2, 0)');
+        ctx.fillStyle = scrimGrad;
+        ctx.fillRect(0, scrimTop, W, scrimBot - scrimTop);
+        ctx.font = `bold ${titleSize}px "Courier New", monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#003322';
+        ctx.fillText('REKTANOID', centerX, titleY);
+
+        // ── Subtitle ──
+        let y = fieldTop + menuLayout.length * rowH + 22 * sy;
+        const subSize = Math.round(20 * sy);
+        ctx.font = `bold ${subSize}px "Courier New", monospace`;
+        ctx.fillStyle = '#226688';
+        ctx.fillText('BREAK BLOCKS. PUMP BAGS. GET REKT.', centerX, y);
+
+        // ── NFA line ──
+        y += subSize * 2.2;
+        const nfaSize = Math.round(14 * sy);
+        ctx.font = `${nfaSize}px "Courier New", monospace`;
+        ctx.fillStyle = '#556677';
+        ctx.fillText('NFA \u2022 DYOR \u2022 WAGMI', centerX, y);
+
+        // ── Decorative paddle + bouncing ball ──
+        y += nfaSize * 3;
+        const paddleW = 70 * sx;
+        const paddleH = 8 * sy;
+        const ballRad = 5 * sy;
+        ctx.fillStyle = '#153322';
+        ctx.fillRect(centerX - paddleW / 2, y, paddleW, paddleH);
+        ctx.strokeStyle = '#1a4433';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(centerX - paddleW / 2, y, paddleW, paddleH);
+        const ballBounceY = y - 14 * sy - Math.abs(Math.sin(t * 2.5)) * 28 * sy;
+        const ballBounceX = centerX + Math.sin(t * 1.3) * 35 * sx;
+        ctx.beginPath();
+        ctx.arc(ballBounceX, ballBounceY, ballRad, 0, Math.PI * 2);
+        ctx.fillStyle = '#1a4433';
+        ctx.fill();
+        for (let i = 1; i <= 3; i++) {
+          const trailT = t - i * 0.06;
+          const trailY2 = y - 14 * sy - Math.abs(Math.sin(trailT * 2.5)) * 28 * sy;
+          const trailX2 = centerX + Math.sin(trailT * 1.3) * 35 * sx;
+          ctx.globalAlpha = 0.15 / i;
+          ctx.beginPath();
+          ctx.arc(trailX2, trailY2, ballRad * (1 - i * 0.15), 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        // ── Divider ──
+        y += paddleH + 28 * sy;
+        ctx.strokeStyle = '#2a4444';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(W * 0.1, y);
+        ctx.lineTo(W * 0.9, y);
+        ctx.stroke();
+
+        // ── Controls ──
+        y += 24 * sy;
+        const ctrlSize = Math.round(14 * sy);
+        ctx.font = `${ctrlSize}px "Courier New", monospace`;
+        ctx.fillStyle = '#556677';
+        ctx.fillText('Arrow keys / Mouse to move', centerX, y);
+        y += ctrlSize * 1.6;
+        ctx.fillText('Space / Click to launch', centerX, y);
+
+        // ── SELECT LEVERAGE ──
+        y += ctrlSize * 4.5;
+        const levSize = Math.round(18 * sy);
+        ctx.font = `bold ${levSize}px "Courier New", monospace`;
+        ctx.fillStyle = '#446677';
+        ctx.fillText('SELECT LEVERAGE', centerX, y);
+
+        // ── Risk buttons ──
+        y += levSize * 4.5;
+        const profiles = screen.riskProfiles;
+        const btnW = 115 * sx;
+        const btnH = 70 * sy;
+        const gap = 18 * sx;
+        const totalBtnW = profiles.length * btnW + (profiles.length - 1) * gap;
+        let bx2 = (W - totalBtnW) / 2;
+
+        this.riskButtonRects = [];
+        for (let i = 0; i < profiles.length; i++) {
+          const p = profiles[i];
+          const isSelected = p.id === this.selectedRiskId;
+          // Border/text: selected ~30%, unselected ~20%
+          // Bloom threshold is 0.03 so even 30% of #ffaa00 = #4c3300 will bloom slightly
+          const dimMult = isSelected ? 0.30 : 0.20;
+          const dimColor = this.dimColor(p.color, dimMult);
+          const nameColor = this.dimColor(p.color, isSelected ? 0.35 : 0.25);
+
+          const gameX = bx2 / sx;
+          const gameY = (y - btnH / 2) / sy;
+          const gameW = btnW / sx;
+          const gameH = btnH / sy;
+          this.riskButtonRects.push({ id: p.id, gx: gameX, gy: gameY, gw: gameW, gh: gameH });
+
+          const bxc = bx2;
+          const byc = y - btnH / 2;
+
+          // Button fill — barely visible tint
+          ctx.fillStyle = isSelected ? this.dimColor(p.color, 0.04) : '#040806';
+          ctx.fillRect(bxc, byc, btnW, btnH);
+
+          // Outer border
+          ctx.strokeStyle = dimColor;
+          ctx.lineWidth = (isSelected ? 2.5 : 1) * sy;
+          ctx.strokeRect(bxc + 1, byc + 1, btnW - 2, btnH - 2);
+
+          // Selected indicator
+          if (isSelected) {
+            ctx.fillStyle = dimColor;
+            ctx.font = `${Math.round(14 * sy)}px "Courier New", monospace`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('\u25BC', bxc + btnW / 2, byc - 8 * sy);
+          }
+
+          // Label (e.g. "1x")
+          const lblSize = Math.round(30 * sy);
+          ctx.font = `bold ${lblSize}px "Courier New", monospace`;
+          ctx.fillStyle = dimColor;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(p.label, bxc + btnW / 2, byc + btnH * 0.32);
+
+          // Name (e.g. "Spot")
+          const nameSize = Math.round(15 * sy);
+          ctx.font = `${nameSize}px "Courier New", monospace`;
+          ctx.fillStyle = nameColor;
+          ctx.fillText(p.name, bxc + btnW / 2, byc + btnH * 0.7);
+
+          bx2 += btnW + gap;
+        }
+
+        // Risk description
+        y += btnH / 2 + 35 * sy;
+        const descSize = Math.round(16 * sy);
+        ctx.font = `${descSize}px "Courier New", monospace`;
+        ctx.fillStyle = '#556677';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const selectedProfile = profiles.find(p => p.id === this.selectedRiskId);
+        if (selectedProfile) {
+          ctx.fillText(selectedProfile.description, centerX, y);
+        }
+
+        // ── APE IN prompt (pulsing) ──
+        y += descSize * 4.5;
+        const apeSize = Math.round(26 * sy);
+        const pulse = 0.6 + 0.3 * Math.sin(now * 0.004);
+        ctx.globalAlpha = pulse;
+        ctx.font = `bold ${apeSize}px "Courier New", monospace`;
+        ctx.fillStyle = '#665522';
+        ctx.fillText('APE IN (SPACE / CLICK)', centerX, y);
+        ctx.globalAlpha = 1;
+
+        // ── Studio logo at the bottom ──
+        if (this.logoLoaded && this.logoImg) {
+          const logoH = 50 * sy;
+          const logoAspect = this.logoImg.naturalWidth / this.logoImg.naturalHeight;
+          const logoW = logoH * logoAspect;
+          const logoX = (W - logoW) / 2;
+          const logoY = H - logoH - 18 * sy;
+          ctx.globalAlpha = 0.3;
+          ctx.drawImage(this.logoImg, logoX, logoY, logoW, logoH);
+          ctx.globalAlpha = 1;
+        }
+        break;
+      }
+
+      case 'stage-intro': {
+        ctx.fillStyle = 'rgba(0, 4, 6, 0.6)';
+        ctx.fillRect(0, 0, W, H);
+
+        const centerX = W / 2;
+        const centerY = H * 0.42;
+        const maxTextW = W - 40 * sx;
+
+        // Level name
+        const nameSize = Math.round(52 * sy);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#006644';
+        fitText(ctx, screen.name, centerX, centerY, maxTextW, nameSize, true);
+
+        // Flavor text
+        const flavorSize = Math.round(22 * sy);
+        ctx.fillStyle = '#226688';
+        fitText(ctx, screen.flavorText, centerX, centerY + nameSize * 0.9, maxTextW, flavorSize, false);
+
+        // Boss info
+        if (screen.bossInfo) {
+          const bossSize = Math.round(18 * sy);
+          ctx.fillStyle = '#664422';
+          fitText(ctx, screen.bossInfo, centerX, centerY + nameSize * 0.9 + flavorSize * 1.8, maxTextW, bossSize, true);
+        }
+        break;
+      }
+
+      case 'paused': {
+        ctx.fillStyle = 'rgba(0, 4, 6, 0.75)';
+        ctx.fillRect(0, 0, W, H);
+
+        const centerX = W / 2;
+        const centerY = H * 0.42;
+
+        const pauseSize = Math.round(52 * sy);
+        const maxTextW = W - 40 * sx;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#226688';
+        fitText(ctx, 'PAUSED', centerX, centerY, maxTextW, pauseSize, true);
+
+        const hintSize = Math.round(22 * sy);
+        ctx.fillStyle = '#556677';
+        fitText(ctx, 'Press ESC to resume', centerX, centerY + pauseSize * 1.0, maxTextW, hintSize, false);
+        break;
+      }
+
+      case 'game-over': {
+        ctx.fillStyle = 'rgba(6, 0, 0, 0.85)';
+        ctx.fillRect(0, 0, W, H);
+
+        const centerX = W / 2;
+        let y = H * 0.30;
+        const maxTextW = W - 40 * sx;
+
+        // LIQUIDATED — muted red
+        const titleSize = Math.round(64 * sy);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#661111';
+        fitText(ctx, 'LIQUIDATED', centerX, y, maxTextW, titleSize, true);
+
+        // BAGS LIQUIDATED
+        y += titleSize * 0.85;
+        const subSize = Math.round(22 * sy);
+        ctx.fillStyle = '#552222';
+        fitText(ctx, 'BAGS LIQUIDATED', centerX, y, maxTextW, subSize, true);
+
+        // Bag value
+        y += subSize * 1.8;
+        const valSize = Math.round(36 * sy);
+        ctx.fillStyle = '#665522';
+        fitText(ctx, '$' + screen.bagValue, centerX, y, maxTextW, valSize, true);
+
+        // -99.7% NGMI
+        y += valSize * 1.2;
+        const ngmiSize = Math.round(20 * sy);
+        ctx.fillStyle = '#552222';
+        fitText(ctx, '-99.7% NGMI', centerX, y, maxTextW, ngmiSize, true);
+
+        // Stage info
+        y += ngmiSize * 1.8;
+        const stageSize = Math.round(18 * sy);
+        ctx.fillStyle = '#556666';
+        fitText(ctx, screen.stageText, centerX, y, maxTextW, stageSize, false);
+
+        // APE BACK IN prompt
+        y += stageSize * 3;
+        const apeSize = Math.round(22 * sy);
+        const pulse = 0.5 + 0.3 * Math.sin(now * 0.004);
+        ctx.globalAlpha = pulse;
+        ctx.fillStyle = '#226688';
+        fitText(ctx, 'PRESS SPACE TO APE BACK IN', centerX, y, maxTextW, apeSize, true);
+        ctx.globalAlpha = 1;
+        break;
+      }
+
+      case 'victory': {
+        ctx.fillStyle = 'rgba(6, 4, 0, 0.85)';
+        ctx.fillRect(0, 0, W, H);
+
+        const centerX = W / 2;
+        let y = H * 0.25;
+        const maxTextW = W - 40 * sx;
+
+        // CYCLE TOP CALLED
+        const titleSize = Math.round(56 * sy);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#665522';
+        fitText(ctx, 'CYCLE TOP CALLED', centerX, y, maxTextW, titleSize, true);
+
+        // BAGS MOONED
+        y += titleSize * 0.85;
+        const subSize = Math.round(22 * sy);
+        ctx.fillStyle = '#006644';
+        fitText(ctx, 'BAGS MOONED', centerX, y, maxTextW, subSize, true);
+
+        // Moon value
+        y += subSize * 1.8;
+        const valSize = Math.round(40 * sy);
+        ctx.fillStyle = '#006644';
+        fitText(ctx, '$' + screen.moonValue, centerX, y, maxTextW, valSize, true);
+
+        // Unrealized gains
+        y += valSize * 1.2;
+        const gainsSize = Math.round(22 * sy);
+        ctx.fillStyle = '#005533';
+        fitText(ctx, '+' + screen.returnPct + '% UNREALIZED GAINS', centerX, y, maxTextW, gainsSize, true);
+
+        // Risk mode
+        y += gainsSize * 1.8;
+        const riskSize = Math.round(18 * sy);
+        ctx.fillStyle = this.dimColor(screen.riskColor, 0.3);
+        fitText(ctx, screen.riskLabel + ' ' + screen.riskName + ' MODE', centerX, y, maxTextW, riskSize, true);
+
+        // APE BACK IN
+        y += riskSize * 3;
+        const apeSize = Math.round(22 * sy);
+        const pulse = 0.6 + 0.3 * Math.sin(now * 0.004);
+        ctx.globalAlpha = pulse;
+        ctx.fillStyle = '#226688';
+        fitText(ctx, 'PRESS SPACE TO APE BACK IN', centerX, y, maxTextW, apeSize, true);
+        ctx.globalAlpha = 1;
+        break;
+      }
+    }
+
+    ctx.restore();
   }
 
   // ── Render ──

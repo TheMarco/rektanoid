@@ -45,11 +45,13 @@ class AudioSystem {
   private ambientGains: GainNode[] = [];
   private currentAmbientState: AmbientState | null = null;
 
-  // Background music
+  // Background music playlist
   private musicEl: HTMLAudioElement | null = null;
   private musicSource: MediaElementAudioSourceNode | null = null;
   private musicGain: GainNode | null = null;
   private musicPlaying = false;
+  private musicPlaylist: string[] = [];
+  private musicTrackIndex = 0;
 
   get muted(): boolean {
     return this._muted;
@@ -202,16 +204,46 @@ class AudioSystem {
     this.masterGain.gain.linearRampToValueAtTime(this._muted ? 0 : this._volume, t + 0.03);
   }
 
+  private shufflePlaylist(): void {
+    const tracks = [
+      'music/soundtrack1.mp3',
+      'music/soundtrack2.mp3',
+      'music/soundtrack3.mp3',
+      'music/soundtrack4.mp3',
+      'music/soundtrack5.mp3',
+      'music/soundtrack6.mp3',
+    ];
+    // Fisher-Yates shuffle
+    for (let i = tracks.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [tracks[i], tracks[j]] = [tracks[j], tracks[i]];
+    }
+    this.musicPlaylist = tracks;
+    this.musicTrackIndex = 0;
+  }
+
+  private playCurrentTrack(): void {
+    if (!this.musicEl || this.musicPlaylist.length === 0) return;
+    this.musicEl.src = this.musicPlaylist[this.musicTrackIndex];
+    this.musicEl.play().catch(() => {});
+  }
+
   startMusic(): void {
     if (this.musicPlaying) return;
     if (!this.initialized) this.init();
     if (!this.ctx || !this.masterGain) return;
     this.resume();
 
+    // Shuffle playlist each time music starts
+    this.shufflePlaylist();
+
     if (!this.musicEl) {
-      this.musicEl = new Audio('music/soundtrack.mp3');
-      this.musicEl.loop = true;
+      this.musicEl = new Audio();
       this.musicEl.preload = 'auto';
+      this.musicEl.addEventListener('ended', () => {
+        this.musicTrackIndex = (this.musicTrackIndex + 1) % this.musicPlaylist.length;
+        this.playCurrentTrack();
+      });
       this.musicSource = this.ctx.createMediaElementSource(this.musicEl);
       this.musicGain = this.ctx.createGain();
       this.musicGain.gain.value = 0.7;
@@ -219,7 +251,7 @@ class AudioSystem {
       this.musicGain.connect(this.masterGain);
     }
 
-    this.musicEl.play().catch(() => {});
+    this.playCurrentTrack();
     this.musicPlaying = true;
   }
 
