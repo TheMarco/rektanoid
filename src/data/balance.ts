@@ -9,10 +9,19 @@ export const PADDLE_WIDTH_SHRUNK = 48;
 // ── Ball ──
 export const BALL_RADIUS = 3;
 export const BALL_BASE_SPEED = 420;
-export const BALL_SPEED_CAP = 700;
-export const BALL_SPEED_INCREMENT = 5; // per brick hit
-export const BALL_MIN_VERTICAL_RATIO = 0.3; // prevent flat angles
-export const BALL_LAUNCH_ANGLE_DEG = -75; // degrees from horizontal
+export const BALL_MIN_SPEED = 360;
+export const BALL_SPEED_CAP = 640;
+export const BALL_SPEED_INCREMENT = 5; // legacy — kept for powerup effects
+export const BALL_SPEED_TIER_EVERY_HITS = 12;
+export const BALL_SPEED_TIER_ADD = 18;
+export const BALL_MIN_VERTICAL_RATIO = 0.53; // prevent flat angles
+export const BALL_LAUNCH_ANGLE_DEG = -75; // degrees from horizontal (kept for re-launch safety)
+export const BALL_SUBSTEPS = 2;
+
+// ── Paddle bounce ──
+export const PADDLE_MAX_BOUNCE_ANGLE_DEG = 58;
+export const PADDLE_CURVE_POWER = 1.15;
+export const PADDLE_VELOCITY_INFLUENCE = 0.18;
 
 // ── Lives ──
 export const STARTING_LIVES = 3;

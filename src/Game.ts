@@ -31,6 +31,10 @@ type GameState = 'menu' | 'playing' | 'stage-intro' | 'paused' | 'game-over' | '
 
 interface Ball {
   x: number; y: number; vx: number; vy: number;
+  speed: number;         // current target speed
+  lastX: number;         // previous frame position (for collision classification)
+  lastY: number;
+  brickHits: number;     // total brick hits for speed tier calculation
   mesh: THREE.Group;
   trail: THREE.Mesh;
   trailPositions: number[];
@@ -106,6 +110,8 @@ export class Game {
 
   // Paddle
   private paddleX = GAME_WIDTH / 2;
+  private lastPaddleX = GAME_WIDTH / 2;
+  private paddleVx = 0;
   private paddleWidth = B.PADDLE_WIDTH;
   private paddleMesh: THREE.Group | null = null;
 
@@ -499,10 +505,14 @@ export class Game {
     const trail = this.r.makeBallTrail();
     this.r.scene.add(trail);
 
+    const startX = this.paddleX;
+    const startY = GAME_HEIGHT - B.PADDLE_Y_OFFSET - B.PADDLE_HEIGHT / 2 - B.BALL_RADIUS - 2;
     const ball: Ball = {
-      x: this.paddleX,
-      y: GAME_HEIGHT - B.PADDLE_Y_OFFSET - B.PADDLE_HEIGHT / 2 - B.BALL_RADIUS - 2,
+      x: startX, y: startY,
       vx: 0, vy: 0,
+      speed: B.BALL_BASE_SPEED * this.getLevelSpeedMult(),
+      lastX: startX, lastY: startY,
+      brickHits: 0,
       mesh, trail,
       trailPositions: [],
     };
@@ -516,10 +526,11 @@ export class Game {
     if (this.ballLaunched) return;
     const ball = this.balls[0];
     if (!ball) return;
-    // Only set ballLaunched AFTER confirming a ball exists
     this.ballLaunched = true;
     const speed = B.BALL_BASE_SPEED * this.getLevelSpeedMult();
     const angle = degToRad(B.BALL_LAUNCH_ANGLE_DEG);
+    ball.speed = speed;
+    ball.brickHits = 0;
     ball.vx = Math.cos(angle) * speed;
     ball.vy = Math.sin(angle) * speed;
   }
@@ -1012,9 +1023,8 @@ export class Game {
         const pulsePhase = Math.sin(t * Math.PI * 6);
         if (pulsePhase > 0.9 && Math.random() < 0.1) {
           for (const ball of this.balls) {
-            const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-            const newSpeed = Math.min(speed * 1.15, B.BALL_SPEED_CAP);
-            const norm = normalize(ball.vx, ball.vy, newSpeed);
+            ball.speed = Math.min(ball.speed * 1.15, B.BALL_SPEED_CAP);
+            const norm = normalize(ball.vx, ball.vy, ball.speed);
             ball.vx = norm.vx;
             ball.vy = norm.vy;
           }
@@ -1174,6 +1184,8 @@ export class Game {
 
   // ── Paddle update ──
   private updatePaddle(dt: number) {
+    this.lastPaddleX = this.paddleX;
+
     if (this.keys['ArrowLeft'] || this.keys['KeyA'] || this.keys['ArrowRight'] || this.keys['KeyD']) {
       this.useMouseControl = false;
     }
@@ -1189,6 +1201,9 @@ export class Game {
 
     this.paddleX = clamp(this.paddleX, this.paddleWidth / 2, GAME_WIDTH - this.paddleWidth / 2);
 
+    // Compute paddle velocity for ball influence
+    this.paddleVx = dt > 0 ? (this.paddleX - this.lastPaddleX) / dt : 0;
+
     if (this.paddleMesh) {
       this.r.setPos(this.paddleMesh, this.paddleX, GAME_HEIGHT - B.PADDLE_Y_OFFSET);
     }
@@ -1202,33 +1217,54 @@ export class Game {
     }
   }
 
-  // ── Ball update ──
+  // ── Ball update (substepped) ──
   private updateBalls(dt: number) {
     for (let i = this.balls.length - 1; i >= 0; i--) {
       const ball = this.balls[i];
 
       if (this.ballLaunched) {
         // Safety valve: if ball has near-zero speed, re-launch it
-        const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-        if (speed < 1) {
-          const reSpeed = B.BALL_BASE_SPEED * this.getLevelSpeedMult();
-          const reAngle = degToRad(B.BALL_LAUNCH_ANGLE_DEG);
-          ball.vx = Math.cos(reAngle) * reSpeed;
-          ball.vy = Math.sin(reAngle) * reSpeed;
+        const curLen = Math.hypot(ball.vx, ball.vy);
+        if (curLen < 1) {
+          ball.vx = 0;
+          ball.vy = -ball.speed;
         }
 
-        ball.x += ball.vx * dt;
-        ball.y += ball.vy * dt;
+        // Store previous position for collision classification
+        ball.lastX = ball.x;
+        ball.lastY = ball.y;
 
-        // Wall bouncing (left, right, top)
-        if (ball.x - B.BALL_RADIUS < 0) { ball.x = B.BALL_RADIUS; ball.vx = Math.abs(ball.vx); }
-        if (ball.x + B.BALL_RADIUS > GAME_WIDTH) { ball.x = GAME_WIDTH - B.BALL_RADIUS; ball.vx = -Math.abs(ball.vx); }
-        if (ball.y - B.BALL_RADIUS < 0) { ball.y = B.BALL_RADIUS; ball.vy = Math.abs(ball.vy); }
+        // Substepped movement + collision
+        const substeps = B.BALL_SUBSTEPS;
+        const stepDt = dt / substeps;
+        for (let s = 0; s < substeps; s++) {
+          ball.x += ball.vx * stepDt;
+          ball.y += ball.vy * stepDt;
 
-        // Enforce min vertical
-        const curSpeed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-        if (curSpeed > 0) {
-          const fixed = enforceMinVertical(ball.vx, ball.vy, B.BALL_MIN_VERTICAL_RATIO, curSpeed);
+          // Wall collisions
+          if (ball.x - B.BALL_RADIUS < 0) { ball.x = B.BALL_RADIUS; ball.vx = Math.abs(ball.vx); }
+          if (ball.x + B.BALL_RADIUS > GAME_WIDTH) { ball.x = GAME_WIDTH - B.BALL_RADIUS; ball.vx = -Math.abs(ball.vx); }
+          if (ball.y - B.BALL_RADIUS < 0) { ball.y = B.BALL_RADIUS; ball.vy = Math.abs(ball.vy); }
+
+          // Paddle collision
+          this.resolveBallPaddle(ball);
+
+          // Brick collision (single best brick per substep)
+          this.resolveBallBricks(ball);
+
+          // Shield collision
+          const shieldY = GAME_HEIGHT - B.PADDLE_Y_OFFSET + B.PADDLE_HEIGHT + 15;
+          if (this.shieldActive && ball.y + B.BALL_RADIUS > shieldY && ball.vy > 0) {
+            ball.vy = -Math.abs(ball.vy);
+            ball.y = shieldY - B.BALL_RADIUS;
+            this.r.burst(ball.x, shieldY, 0x44ddff, 8);
+            audio.shieldHit();
+            this.removeShield();
+          }
+
+          // Enforce speed and anti-degenerate
+          this.enforceBallSpeed(ball);
+          const fixed = enforceMinVertical(ball.vx, ball.vy, B.BALL_MIN_VERTICAL_RATIO, ball.speed);
           ball.vx = fixed.vx;
           ball.vy = fixed.vy;
         }
@@ -1255,6 +1291,17 @@ export class Game {
     }
   }
 
+  private enforceBallSpeed(ball: Ball) {
+    const len = Math.hypot(ball.vx, ball.vy);
+    if (len <= 0.0001) {
+      ball.vx = 0;
+      ball.vy = -ball.speed;
+      return;
+    }
+    ball.vx = (ball.vx / len) * ball.speed;
+    ball.vy = (ball.vy / len) * ball.speed;
+  }
+
   private removeBall(index: number) {
     const ball = this.balls[index];
     this.r.remove(ball.mesh);
@@ -1262,38 +1309,11 @@ export class Game {
     this.balls.splice(index, 1);
   }
 
-  // ── Collisions ──
+  // ── Collisions (non-ball; ball collisions are in substep loop) ──
   private updateCollisions() {
     if (!this.ballLaunched) return;
 
     const paddleY = GAME_HEIGHT - B.PADDLE_Y_OFFSET;
-
-    for (const ball of this.balls) {
-      // Ball vs paddle
-      if (this.circleRect(ball.x, ball.y, B.BALL_RADIUS,
-          this.paddleX, paddleY, this.paddleWidth, B.PADDLE_HEIGHT) && ball.vy > 0) {
-        this.handleBallPaddle(ball);
-      }
-
-      // Ball vs bricks
-      for (const brick of this.bricks) {
-        if (!brick.alive) continue;
-        if (this.circleRect(ball.x, ball.y, B.BALL_RADIUS,
-            brick.x, brick.y, B.BRICK_WIDTH, B.BRICK_HEIGHT)) {
-          this.handleBallBrick(ball, brick);
-        }
-      }
-
-      // Ball vs shield (just below paddle area)
-      const shieldY = GAME_HEIGHT - B.PADDLE_Y_OFFSET + B.PADDLE_HEIGHT + 15;
-      if (this.shieldActive && ball.y > shieldY && ball.vy > 0) {
-        ball.vy = -Math.abs(ball.vy);
-        ball.y = shieldY - B.BALL_RADIUS;
-        this.r.burst(ball.x, shieldY, 0x44ddff, 8);
-        audio.shieldHit();
-        this.removeShield();
-      }
-    }
 
     // Powerups vs paddle
     for (const pu of this.powerups) {
@@ -1331,47 +1351,137 @@ export class Game {
     return Math.abs(ax - bx) < (aw + bw) / 2 && Math.abs(ay - by) < (ah + bh) / 2;
   }
 
-  private handleBallPaddle(ball: Ball) {
-    const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy) || B.BALL_BASE_SPEED;
-    const hitPos = clamp((ball.x - this.paddleX) / (this.paddleWidth / 2), -1, 1);
-    const angle = degToRad(-90 + hitPos * 55);
-    const vel = normalize(Math.cos(angle) * speed, Math.sin(angle) * speed, speed);
-    ball.vx = vel.vx;
-    ball.vy = vel.vy;
+  // ── Paddle collision (spec §12-15): top-face aiming + side fallback ──
+  private resolveBallPaddle(ball: Ball) {
+    const pLeft = this.paddleX - this.paddleWidth / 2;
+    const pRight = this.paddleX + this.paddleWidth / 2;
+    const pTop = GAME_HEIGHT - B.PADDLE_Y_OFFSET - B.PADDLE_HEIGHT / 2;
+    const pBottom = GAME_HEIGHT - B.PADDLE_Y_OFFSET + B.PADDLE_HEIGHT / 2;
 
-    if (ball.vy > 0) ball.vy = -Math.abs(ball.vy);
-    ball.y = GAME_HEIGHT - B.PADDLE_Y_OFFSET - B.PADDLE_HEIGHT / 2 - B.BALL_RADIUS - 1;
+    if (!this.circleRect(ball.x, ball.y, B.BALL_RADIUS, this.paddleX, GAME_HEIGHT - B.PADDLE_Y_OFFSET, this.paddleWidth, B.PADDLE_HEIGHT)) return;
 
-    this.r.burst(ball.x, ball.y, 0x44ddff, 6);
-    audio.paddleHit();
+    const tolerance = 4;
+    const prevBottom = ball.lastY + B.BALL_RADIUS;
+    const currBottom = ball.y + B.BALL_RADIUS;
+    const currLeft = ball.x - B.BALL_RADIUS;
+    const currRight = ball.x + B.BALL_RADIUS;
+    const horizontalOverlap = currRight >= pLeft && currLeft <= pRight;
+
+    // Top-face hit: ball moving down, was above paddle top last frame, horizontal overlap
+    const cameFromAbove = ball.vy > 0 && prevBottom <= pTop + tolerance && currBottom >= pTop && horizontalOverlap;
+
+    if (cameFromAbove) {
+      // §14: Contact-point aiming with curve power
+      let t = (ball.x - this.paddleX) / (this.paddleWidth * 0.5);
+      t = clamp(t, -1, 1);
+
+      const shapedT = Math.sign(t) * Math.pow(Math.abs(t), B.PADDLE_CURVE_POWER);
+      const maxAngle = degToRad(B.PADDLE_MAX_BOUNCE_ANGLE_DEG);
+      const outAngle = shapedT * maxAngle;
+
+      const speed = ball.speed;
+      let vx = speed * Math.sin(outAngle);
+      let vy = -speed * Math.cos(outAngle);
+
+      // §14.5: Paddle velocity influence
+      vx += this.paddleVx * B.PADDLE_VELOCITY_INFLUENCE;
+
+      // §14.6: Renormalize to preserve speed
+      const len = Math.hypot(vx, vy) || 1;
+      vx = (vx / len) * speed;
+      vy = (vy / len) * speed;
+
+      // §14.7: Safety clamp — enforce minimum vertical
+      const minVyMag = speed * B.BALL_MIN_VERTICAL_RATIO;
+      if (Math.abs(vy) < minVyMag) {
+        vy = -minVyMag;
+        const remainingVx = Math.sqrt(Math.max(0, speed * speed - vy * vy));
+        vx = Math.sign(vx || t || 1) * remainingVx;
+      }
+
+      // §14.8: Positional correction
+      ball.y = pTop - B.BALL_RADIUS - 0.5;
+      ball.vx = vx;
+      ball.vy = vy;
+
+      this.r.burst(ball.x, ball.y, 0x44ddff, 6);
+      audio.paddleHit();
+      return;
+    }
+
+    // Side/bottom fallback: use penetration-based resolution
+    const penLeft = Math.abs(currRight - pLeft);
+    const penRight = Math.abs(pRight - currLeft);
+    const penTop = Math.abs(currBottom - pTop);
+    const penBottom = Math.abs(pBottom - (ball.y - B.BALL_RADIUS));
+    const minPenX = Math.min(penLeft, penRight);
+    const minPenY = Math.min(penTop, penBottom);
+
+    if (minPenX < minPenY) {
+      if (ball.x < this.paddleX) {
+        ball.x = pLeft - B.BALL_RADIUS - 0.5;
+        ball.vx = -Math.abs(ball.vx);
+      } else {
+        ball.x = pRight + B.BALL_RADIUS + 0.5;
+        ball.vx = Math.abs(ball.vx);
+      }
+    } else {
+      if (ball.y < GAME_HEIGHT - B.PADDLE_Y_OFFSET) {
+        ball.y = pTop - B.BALL_RADIUS - 0.5;
+        ball.vy = -Math.abs(ball.vy);
+      } else {
+        ball.y = pBottom + B.BALL_RADIUS + 0.5;
+        ball.vy = Math.abs(ball.vy);
+      }
+    }
   }
 
-  private handleBallBrick(ball: Ball, brick: BrickInst) {
-    const dx = ball.x - brick.x;
-    const dy = ball.y - brick.y;
-    const overlapX = B.BRICK_WIDTH / 2 + B.BALL_RADIUS - Math.abs(dx);
-    const overlapY = B.BRICK_HEIGHT / 2 + B.BALL_RADIUS - Math.abs(dy);
+  // ── Brick collision (spec §16-18): single best brick per substep ──
+  private resolveBallBricks(ball: Ball) {
+    let bestBrick: BrickInst | null = null;
+    let bestPen = Infinity;
+    let bestAxis: 'x' | 'y' = 'y';
 
-    if (!this.piercing) {
-      if (overlapX < overlapY) {
-        ball.vx = Math.abs(ball.vx) * Math.sign(dx);
-        ball.x = brick.x + Math.sign(dx) * (B.BRICK_WIDTH / 2 + B.BALL_RADIUS + 1);
-      } else {
-        ball.vy = Math.abs(ball.vy) * Math.sign(dy);
-        ball.y = brick.y + Math.sign(dy) * (B.BRICK_HEIGHT / 2 + B.BALL_RADIUS + 1);
+    for (const brick of this.bricks) {
+      if (!brick.alive) continue;
+      if (!this.circleRect(ball.x, ball.y, B.BALL_RADIUS, brick.x, brick.y, B.BRICK_WIDTH, B.BRICK_HEIGHT)) continue;
+
+      const dx = ball.x - brick.x;
+      const dy = ball.y - brick.y;
+      const penX = B.BRICK_WIDTH / 2 + B.BALL_RADIUS - Math.abs(dx);
+      const penY = B.BRICK_HEIGHT / 2 + B.BALL_RADIUS - Math.abs(dy);
+      const axis: 'x' | 'y' = penX < penY ? 'x' : 'y';
+      const pen = Math.min(penX, penY);
+
+      if (pen < bestPen) {
+        bestPen = pen;
+        bestBrick = brick;
+        bestAxis = axis;
       }
     }
 
-    this.hitBrick(brick);
+    if (!bestBrick) return;
 
-    // Speed increase
-    const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-    if (speed < B.BALL_SPEED_CAP) {
-      const newSpeed = Math.min(speed + B.BALL_SPEED_INCREMENT, B.BALL_SPEED_CAP);
-      const norm = normalize(ball.vx, ball.vy, newSpeed);
-      ball.vx = norm.vx;
-      ball.vy = norm.vy;
+    // Resolve collision (skip reflection if piercing)
+    if (!this.piercing) {
+      const dx = ball.x - bestBrick.x;
+      const dy = ball.y - bestBrick.y;
+      if (bestAxis === 'x') {
+        ball.vx = Math.abs(ball.vx) * Math.sign(dx || 1);
+        ball.x = bestBrick.x + Math.sign(dx || 1) * (B.BRICK_WIDTH / 2 + B.BALL_RADIUS + 0.5);
+      } else {
+        ball.vy = Math.abs(ball.vy) * Math.sign(dy || 1);
+        ball.y = bestBrick.y + Math.sign(dy || 1) * (B.BRICK_HEIGHT / 2 + B.BALL_RADIUS + 0.5);
+      }
     }
+
+    this.hitBrick(bestBrick);
+
+    // Speed tier progression (spec §19.2)
+    ball.brickHits++;
+    const tiers = Math.floor(ball.brickHits / B.BALL_SPEED_TIER_EVERY_HITS);
+    const baseSpeed = B.BALL_BASE_SPEED * this.getLevelSpeedMult();
+    ball.speed = clamp(baseSpeed + tiers * B.BALL_SPEED_TIER_ADD, B.BALL_MIN_SPEED, B.BALL_SPEED_CAP);
   }
 
   private hitBrick(brick: BrickInst) {
@@ -1651,17 +1761,18 @@ export class Game {
 
       case 'chainHalt':
         for (const ball of this.balls) {
-          ball.vx *= 0.6;
-          ball.vy *= 0.6;
+          ball.speed = Math.max(ball.speed * 0.6, B.BALL_MIN_SPEED * this.getLevelSpeedMult());
+          const norm = normalize(ball.vx, ball.vy, ball.speed);
+          ball.vx = norm.vx;
+          ball.vy = norm.vy;
         }
         this.addTimedEffect(def.id, def.duration / 1000, () => {});
         break;
 
       case 'gasSpike':
         for (const ball of this.balls) {
-          const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-          const newSpeed = Math.min(speed * 1.4, B.BALL_SPEED_CAP);
-          const norm = normalize(ball.vx, ball.vy, newSpeed);
+          ball.speed = Math.min(ball.speed * 1.4, B.BALL_SPEED_CAP);
+          const norm = normalize(ball.vx, ball.vy, ball.speed);
           ball.vx = norm.vx;
           ball.vy = norm.vy;
         }
@@ -1817,9 +1928,8 @@ export class Game {
 
     this.adjustSentiment(-8);
     for (const ball of this.balls) {
-      const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
-      const newSpeed = Math.min(speed * 1.2, B.BALL_SPEED_CAP);
-      const norm = normalize(ball.vx, ball.vy, newSpeed);
+      ball.speed = Math.min(ball.speed * 1.2, B.BALL_SPEED_CAP);
+      const norm = normalize(ball.vx, ball.vy, ball.speed);
       ball.vx = norm.vx;
       ball.vy = norm.vy;
     }

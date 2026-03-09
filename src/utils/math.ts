@@ -14,14 +14,13 @@ export function radToDeg(rad: number): number {
   return (rad * 180) / Math.PI;
 }
 
-/** Ensure a velocity vector has at least `minRatio` vertical component */
+/** Ensure |vy| >= speed * minRatio. Uses speed-magnitude ratio (not sum ratio). */
 export function enforceMinVertical(vx: number, vy: number, minRatio: number, speed: number): { vx: number; vy: number } {
-  const absVy = Math.abs(vy);
-  const absVx = Math.abs(vx);
-  if (absVy / (absVx + absVy) < minRatio) {
-    const sign = vy >= 0 ? 1 : -1;
-    const newVy = sign * speed * minRatio;
-    const newVx = Math.sign(vx) * Math.sqrt(speed * speed - newVy * newVy);
+  const minVyMag = speed * minRatio;
+  if (Math.abs(vy) < minVyMag) {
+    const vySign = vy <= 0 ? -1 : 1;
+    const newVy = vySign * minVyMag;
+    const newVx = Math.sign(vx || 1) * Math.sqrt(Math.max(0, speed * speed - newVy * newVy));
     return { vx: newVx, vy: newVy };
   }
   return { vx, vy };
