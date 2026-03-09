@@ -7,6 +7,7 @@ const D = 'drop';
 const U = 'sentimentUp';
 const E = 'explosive';
 const C = 'stable';
+const G = 'rug';
 const _ = null;
 
 // Ethereum diamond shape — stablecoins at core require sentiment shift to break
@@ -21,7 +22,7 @@ export const stage05: LevelDefinition = {
     [_, _, H, T, T, H, _, _],
     [_, H, S, S, S, S, H, _],
     [H, S, U, C, C, U, S, H],
-    [H, S, E, C, C, E, S, H],
+    [H, G, E, C, C, E, G, H],
     [_, H, S, S, S, S, H, _],
     [_, _, H, T, T, H, _, _],
     [_, _, _, D, D, _, _, _],

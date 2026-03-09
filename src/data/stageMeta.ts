@@ -9,6 +9,7 @@ export const STAGE_META: StageMeta[] = [
     preferredMarketMood: 'neutral',
     dropBias: { positive: 1.2, negative: 0.5 },
     signatureGimmick: 'intro',
+    // No mechanics — intro level
   },
   {
     stageNumber: 2,
@@ -18,6 +19,7 @@ export const STAGE_META: StageMeta[] = [
     preferredMarketMood: 'bull',
     dropBias: { positive: 1.1, negative: 0.8 },
     signatureGimmick: 'betrayal',
+    // No mechanics yet
   },
   {
     stageNumber: 3,
@@ -27,6 +29,14 @@ export const STAGE_META: StageMeta[] = [
     preferredMarketMood: 'bear',
     dropBias: { positive: 0.8, negative: 1.3 },
     signatureGimmick: 'downward-pressure',
+    mechanics: {
+      sellWalls: {
+        enabled: true,
+        intervalMin: 18, intervalMax: 28,
+        maxDrops: 2,
+        widthMin: 3, widthMax: 4,
+      },
+    },
   },
   {
     stageNumber: 4,
@@ -36,6 +46,19 @@ export const STAGE_META: StageMeta[] = [
     preferredMarketMood: 'mixed',
     dropBias: { positive: 1.0, negative: 1.0 },
     signatureGimmick: 'volatility',
+    mechanics: {
+      sellWalls: {
+        enabled: true,
+        intervalMin: 20, intervalMax: 30,
+        maxDrops: 2,
+        widthMin: 2, widthMax: 4,
+      },
+      liqLanes: {
+        enabled: true,
+        intervalMin: 16, intervalMax: 24,
+        maxConcurrent: 1,
+      },
+    },
   },
   {
     stageNumber: 5,
@@ -46,6 +69,13 @@ export const STAGE_META: StageMeta[] = [
     dropBias: { positive: 1.0, negative: 0.8 },
     signatureGimmick: 'endurance',
     bossId: 'whale',
+    mechanics: {
+      liqLanes: {
+        enabled: true,
+        intervalMin: 14, intervalMax: 22,
+        maxConcurrent: 1,
+      },
+    },
   },
   {
     stageNumber: 6,
@@ -55,6 +85,15 @@ export const STAGE_META: StageMeta[] = [
     preferredMarketMood: 'bear',
     dropBias: { positive: 0.7, negative: 1.4 },
     signatureGimmick: 'downward-pressure',
+    mechanics: {
+      sellWalls: {
+        enabled: true,
+        intervalMin: 14, intervalMax: 22,
+        maxDrops: 3,
+        widthMin: 3, widthMax: 5,
+      },
+      rugCollapseRadius: 110,
+    },
   },
   {
     stageNumber: 7,
@@ -64,6 +103,14 @@ export const STAGE_META: StageMeta[] = [
     preferredMarketMood: 'mixed',
     dropBias: { positive: 0.6, negative: 0.6 },
     signatureGimmick: 'scarcity',
+    mechanics: {
+      liqLanes: {
+        enabled: true,
+        intervalMin: 12, intervalMax: 20,
+        maxConcurrent: 1,
+      },
+      rugCollapseRadius: 100,
+    },
   },
   {
     stageNumber: 8,
@@ -73,6 +120,20 @@ export const STAGE_META: StageMeta[] = [
     preferredMarketMood: 'mixed',
     dropBias: { positive: 1.0, negative: 1.0 },
     signatureGimmick: 'maze',
+    mechanics: {
+      sellWalls: {
+        enabled: true,
+        intervalMin: 16, intervalMax: 24,
+        maxDrops: 2,
+        widthMin: 2, widthMax: 4,
+      },
+      liqLanes: {
+        enabled: true,
+        intervalMin: 12, intervalMax: 18,
+        maxConcurrent: 1,
+      },
+      rugCollapseRadius: 100,
+    },
   },
   {
     stageNumber: 9,
@@ -83,6 +144,20 @@ export const STAGE_META: StageMeta[] = [
     dropBias: { positive: 0.8, negative: 1.3 },
     signatureGimmick: 'pressure',
     bossId: 'liquidator',
+    mechanics: {
+      sellWalls: {
+        enabled: true,
+        intervalMin: 12, intervalMax: 18,
+        maxDrops: 3,
+        widthMin: 3, widthMax: 5,
+      },
+      liqLanes: {
+        enabled: true,
+        intervalMin: 10, intervalMax: 16,
+        maxConcurrent: 2,
+      },
+      rugCollapseRadius: 120,
+    },
   },
   {
     stageNumber: 10,
@@ -93,5 +168,19 @@ export const STAGE_META: StageMeta[] = [
     dropBias: { positive: 1.0, negative: 1.0 },
     signatureGimmick: 'flip',
     bossId: 'flippening',
+    mechanics: {
+      sellWalls: {
+        enabled: true,
+        intervalMin: 10, intervalMax: 16,
+        maxDrops: 4,
+        widthMin: 3, widthMax: 6,
+      },
+      liqLanes: {
+        enabled: true,
+        intervalMin: 9, intervalMax: 14,
+        maxConcurrent: 2,
+      },
+      rugCollapseRadius: 130,
+    },
   },
 ];

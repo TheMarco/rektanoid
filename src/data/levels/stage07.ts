@@ -10,6 +10,7 @@ const R = 'sentimentDown';
 const I = 'indestructible';
 const C = 'stable';
 const M = 'diamond';
+const G = 'rug';
 const _ = null;
 
 // Diamond shape around halving wall — stablecoins and diamonds frame the event
@@ -24,7 +25,7 @@ export const stage07: LevelDefinition = {
     [S, T, S, I, I, C, _, S],
     [T, S, M, I, I, M, _, T],
     [D, _, M, I, I, M, _, D],
-    [T, C, M, I, I, M, C, T],
+    [T, C, G, I, I, G, C, T],
     [S, _, C, I, I, C, _, S],
     [U, S, _, I, I, _, C, U],
     [M, S, S, I, I, S, S, M],

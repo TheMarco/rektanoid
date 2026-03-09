@@ -22,6 +22,7 @@ export interface EventContext {
   setBallSpeedMultiplier: (mult: number) => void;
   setHazardBias: (bias: number) => void;
   addTickerMessage: (msg: string) => void;
+  setSellWallAccelerated: (active: boolean) => void;
 }
 
 export interface EventDefinition {

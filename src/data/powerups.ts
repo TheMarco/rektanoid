@@ -79,7 +79,7 @@ export const POWERUP_TYPES: Record<string, PowerupDefinition> = {
     positive: false,
     duration: 8000,
     renderKey: 'paperHands',
-    color: 0xff6600,
+    color: 0xcc44ff,
     label: 'SHRINK',
   },
   gasSpike: {
@@ -88,7 +88,7 @@ export const POWERUP_TYPES: Record<string, PowerupDefinition> = {
     positive: false,
     duration: 5000,
     renderKey: 'gasSpike',
-    color: 0xff2200,
+    color: 0xff8800,
     label: 'FAST',
   },
 };

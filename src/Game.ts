@@ -48,6 +48,9 @@ interface BrickInst {
   depegged?: boolean;        // for stable bricks: true when sentiment is extreme
   falling?: boolean;         // for rug-pull effect: brick detaches and falls
   fallingVy?: number;        // fall speed
+  unstable?: boolean;        // rug-pull collapse: warning phase before falling
+  unstableTimer?: number;    // seconds remaining in unstable state
+  sellWallId?: number;       // tracks which sell wall group this brick belongs to
   isBossSupport?: boolean;   // spawned by boss shield attack
   spawnedFromEvent?: boolean; // spawned by market event
 }
@@ -73,6 +76,26 @@ interface Hazard {
 interface Laser {
   x: number; y: number;
   mesh: THREE.Group;
+}
+
+interface LiqLaneStrike {
+  x: number;               // center x in game coords
+  width: number;            // lane width
+  telegraphTimer: number;   // seconds remaining in telegraph phase
+  strikeTimer: number;      // seconds remaining in strike phase (starts after telegraph)
+  phase: 'telegraph' | 'strike' | 'done';
+}
+
+interface SellWall {
+  id: number;
+  brickIndices: number[];   // indices into this.bricks for affected bricks
+  colStart: number;         // leftmost column
+  colEnd: number;           // rightmost column (inclusive)
+  currentRow: number;       // current grid row (increases = descends)
+  dropsRemaining: number;   // how many more 1-row drops
+  telegraphTimer: number;   // seconds of warning before next drop
+  pauseTimer: number;       // seconds of pause between drops
+  phase: 'telegraph' | 'dropping' | 'paused' | 'done';
 }
 
 // ── Game ──
@@ -147,6 +170,14 @@ export class Game {
   private eventHazardBias = 1.0;
   private eventBallSpeedMult = 1.0;
   private pendingTickerMessages: string[] = [];
+
+  // Mechanic systems
+  private liqLanes: LiqLaneStrike[] = [];
+  private liqLaneTimer = 0;          // countdown to next lane strike
+  private sellWalls: SellWall[] = [];
+  private sellWallTimer = 0;         // countdown to next sell wall
+  private sellWallIdCounter = 0;
+  private sellWallAccelerated = false; // true during flashCrash
 
   constructor(container: HTMLElement) {
     this.r = new Renderer(container);
@@ -367,6 +398,13 @@ export class Game {
     this.eventHazardBias = 1.0;
     this.eventBallSpeedMult = 1.0;
 
+    // Reset mechanic systems
+    this.liqLanes = [];
+    this.liqLaneTimer = 8; // grace period at level start
+    this.sellWalls = [];
+    this.sellWallTimer = 10; // grace period at level start
+    this.sellWallAccelerated = false;
+
     // Boss check
     this.bossMode = false;
     this.removeBossVisual();
@@ -533,6 +571,8 @@ export class Game {
       this.updateLasers(dt);
       this.updateHazards(dt);
       this.updateBricks(dt);
+      this.updateLiqLanes(dt);
+      this.updateSellWalls(dt);
       this.updateCombo(dt);
       this.updateEffects();
       this.updateHUD();
@@ -646,6 +686,7 @@ export class Game {
       setBallSpeedMultiplier: (mult) => { this.eventBallSpeedMult = mult; },
       setHazardBias: (bias) => { this.eventHazardBias = bias; },
       addTickerMessage: (msg) => { this.pendingTickerMessages.push(msg); },
+      setSellWallAccelerated: (active) => { this.sellWallAccelerated = active; },
     };
   }
 
@@ -885,23 +926,35 @@ export class Game {
       }
 
       case 'shieldSpawn': {
-        // Spawn a row of tough bricks in front of the boss (once at start of attack)
+        // Spawn a row of bricks in front of the boss (once at start of attack)
+        // Skip positions where bricks already exist to avoid overlap
         if (attack.elapsed < 100 && !this.bricks.some(b => b.alive && b.isBossSupport && Math.abs(b.y - (boss.y + boss.height / 2 + 30)) < 5)) {
           const shieldY = boss.y + boss.height / 2 + 30;
           const count = 4;
           const spacing = boss.width / count;
           const startX = boss.x - (boss.width / 2) + spacing / 2;
+          let spawned = 0;
           for (let i = 0; i < count; i++) {
             const bx = startX + i * spacing;
-            const def = BRICK_TYPES['tough'];
+            // Check for overlap with existing alive bricks
+            const overlaps = this.bricks.some(b => b.alive &&
+              Math.abs(b.x - bx) < B.BRICK_WIDTH * 0.6 &&
+              Math.abs(b.y - shieldY) < B.BRICK_HEIGHT * 0.7);
+            if (overlaps) continue;
+            // 25% chance to spawn a rug brick instead of tough
+            const isRug = Math.random() < 0.25;
+            const def = BRICK_TYPES[isRug ? 'rug' : 'tough'];
             if (!def) continue;
             const mesh = this.r.makeBrick(def, B.BRICK_WIDTH * 0.7, B.BRICK_HEIGHT * 0.8);
             this.r.scene.add(mesh);
             this.r.setPos(mesh, bx, shieldY);
             this.bricks.push({ def, hp: def.hp, x: bx, y: shieldY, alive: true, mesh, isBossSupport: true });
+            spawned++;
           }
-          this.r.burst(boss.x, shieldY, 0x00aaff, 15);
-          audio.brickHit();
+          if (spawned > 0) {
+            this.r.burst(boss.x, shieldY, 0x00aaff, 15);
+            audio.brickHit();
+          }
         }
         break;
       }
@@ -1421,20 +1474,24 @@ export class Game {
         this.r.showCallout(brick.x, brick.y - 25, `${mult}x PAYOUT!`, '#ff8800', 16, true);
       }
 
-      // Rug pull — nearby bricks start falling
+      // Rug pull — nearby bricks become unstable, then fall
       if (brick.def.rug) {
         this.r.flash(0x9933ff, 0.25);
         audio.explosion();
         this.r.showCallout(brick.x, brick.y - 15, 'RUG PULLED!', '#9933ff', 18, true);
+        const stageMeta = STAGE_META[this.currentLevel];
+        const radius = stageMeta?.mechanics?.rugCollapseRadius ?? B.RUG_DEFAULT_RADIUS;
+        const currentFalling = this.bricks.filter(b => b.alive && b.falling).length;
+        let madeUnstable = 0;
         for (const other of this.bricks) {
-          if (!other.alive || other === brick || other.falling) continue;
+          if (!other.alive || other === brick || other.falling || other.unstable) continue;
           if (other.def.id === 'indestructible') continue;
+          if (currentFalling + madeUnstable >= B.RUG_MAX_FALLING) break;
           const dist = Math.sqrt((other.x - brick.x) ** 2 + (other.y - brick.y) ** 2);
-          if (dist < 90) {
-            other.falling = true;
-            other.fallingVy = 30 + Math.random() * 50;
-            const otherCore = other.mesh.children[0] as THREE.LineSegments;
-            (otherCore.material as THREE.LineBasicMaterial).color.setHex(0x9933ff);
+          if (dist < radius) {
+            other.unstable = true;
+            other.unstableTimer = B.RUG_UNSTABLE_DURATION + Math.random() * 0.15;
+            madeUnstable++;
           }
         }
         this.adjustSentiment(-10);
@@ -1838,7 +1895,34 @@ export class Game {
         }
       }
 
-      // Falling bricks (from rug pull)
+      // Unstable bricks — wobble warning, then transition to falling
+      if (brick.unstable && brick.unstableTimer !== undefined) {
+        brick.unstableTimer -= dt;
+        // Visual wobble + purple tint
+        const wobble = Math.sin(performance.now() * 0.025) * 3;
+        this.r.setPos(brick.mesh, brick.x + wobble, brick.y);
+        const core = brick.mesh.children[0] as THREE.LineSegments;
+        const coreMat = core.material as THREE.LineBasicMaterial;
+        // Pulse between original color and purple warning
+        const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.015);
+        const origR = (brick.def.color >> 16) & 0xff;
+        const origG = (brick.def.color >> 8) & 0xff;
+        const origB = brick.def.color & 0xff;
+        const warnR = Math.round(origR * (1 - pulse) + 0x99 * pulse);
+        const warnG = Math.round(origG * (1 - pulse) + 0x33 * pulse);
+        const warnB = Math.round(origB * (1 - pulse) + 0xff * pulse);
+        coreMat.color.setRGB(warnR / 255, warnG / 255, warnB / 255);
+
+        if (brick.unstableTimer <= 0) {
+          brick.unstable = false;
+          brick.unstableTimer = undefined;
+          brick.falling = true;
+          brick.fallingVy = 30 + Math.random() * 50;
+          coreMat.color.setHex(0x9933ff);
+        }
+      }
+
+      // Falling bricks (from rug pull or collapse)
       if (brick.falling && brick.fallingVy !== undefined) {
         brick.y += brick.fallingVy * dt;
         brick.fallingVy += 300 * dt; // gravity
@@ -1861,6 +1945,239 @@ export class Game {
         }
       }
     }
+  }
+
+  // ── Liquidation Lanes ──
+  private updateLiqLanes(dt: number) {
+    if (!this.ballLaunched || this.bossMode) return;
+    const stageMeta = STAGE_META[this.currentLevel];
+    const cfg = stageMeta?.mechanics?.liqLanes;
+    if (!cfg?.enabled) return;
+
+    // Spawn new lane strikes on timer
+    this.liqLaneTimer -= dt;
+    if (this.liqLaneTimer <= 0 && this.liqLanes.length < cfg.maxConcurrent) {
+      // Pick a random column-aligned x position
+      const col = Math.floor(Math.random() * B.BRICK_COLS);
+      const x = B.BRICK_OFFSET_X + col * (B.BRICK_WIDTH + B.BRICK_PADDING) + B.BRICK_WIDTH / 2;
+      this.liqLanes.push({
+        x,
+        width: B.LIQ_LANE_WIDTH,
+        telegraphTimer: B.LIQ_LANE_TELEGRAPH_MS / 1000,
+        strikeTimer: B.LIQ_LANE_STRIKE_MS / 1000,
+        phase: 'telegraph',
+      });
+      this.r.showCallout(x, 100, 'LIQUIDATION!', '#ff4400', 14, true);
+      // Reset timer
+      this.liqLaneTimer = cfg.intervalMin + Math.random() * (cfg.intervalMax - cfg.intervalMin);
+    }
+
+    // Update active lanes
+    for (let i = this.liqLanes.length - 1; i >= 0; i--) {
+      const lane = this.liqLanes[i];
+
+      if (lane.phase === 'telegraph') {
+        lane.telegraphTimer -= dt;
+        // Draw telegraph column warning
+        const progress = 1 - (lane.telegraphTimer / (B.LIQ_LANE_TELEGRAPH_MS / 1000));
+        this.r.drawColumnWarning(lane.x, lane.width, progress, 0xff4400);
+
+        if (lane.telegraphTimer <= 0) {
+          lane.phase = 'strike';
+          audio.explosion();
+          this.r.flash(0xff4400, 0.15);
+        }
+      } else if (lane.phase === 'strike') {
+        lane.strikeTimer -= dt;
+        // Draw active strike beam
+        this.r.drawLiqLaneStrike(lane.x, lane.width, 1 - lane.strikeTimer / (B.LIQ_LANE_STRIKE_MS / 1000));
+
+        // Check paddle collision during strike
+        const halfW = lane.width / 2;
+        if (this.paddleX + this.paddleWidth / 2 > lane.x - halfW &&
+            this.paddleX - this.paddleWidth / 2 < lane.x + halfW) {
+          // Paddle is in the lane — apply hazard hit
+          this.applyHazardHit();
+          lane.phase = 'done';
+        }
+
+        if (lane.strikeTimer <= 0) {
+          lane.phase = 'done';
+        }
+      }
+
+      if (lane.phase === 'done') {
+        this.liqLanes.splice(i, 1);
+      }
+    }
+  }
+
+  // ── Descending Sell Walls ──
+  private updateSellWalls(dt: number) {
+    if (!this.ballLaunched || this.bossMode) return;
+    const stageMeta = STAGE_META[this.currentLevel];
+    const cfg = stageMeta?.mechanics?.sellWalls;
+    if (!cfg?.enabled) return;
+
+    // Spawn new sell wall on timer
+    this.sellWallTimer -= dt;
+    if (this.sellWallTimer <= 0 && this.sellWalls.filter(w => w.phase !== 'done').length === 0) {
+      this.spawnSellWall(cfg);
+      this.sellWallTimer = cfg.intervalMin + Math.random() * (cfg.intervalMax - cfg.intervalMin);
+      if (this.sellWallAccelerated) this.sellWallTimer *= 0.5;
+    }
+
+    // Update active sell walls
+    for (let i = this.sellWalls.length - 1; i >= 0; i--) {
+      const wall = this.sellWalls[i];
+
+      if (wall.phase === 'telegraph') {
+        wall.telegraphTimer -= dt;
+        // Flash affected bricks with warning color
+        const progress = 1 - wall.telegraphTimer / (B.SELL_WALL_TELEGRAPH_MS / 1000);
+        for (const idx of wall.brickIndices) {
+          const brick = this.bricks[idx];
+          if (!brick || !brick.alive || brick.falling || brick.unstable) continue;
+          // Wobble during telegraph
+          const wobble = Math.sin(performance.now() * 0.02 + idx) * 2;
+          this.r.setPos(brick.mesh, brick.x + wobble, brick.y);
+          // Flash red overlay
+          const core = brick.mesh.children[0] as THREE.LineSegments;
+          const mat = core.material as THREE.LineBasicMaterial;
+          const flash = 0.5 + 0.5 * Math.sin(progress * Math.PI * 6);
+          const origR = (brick.def.color >> 16) & 0xff;
+          const origG = (brick.def.color >> 8) & 0xff;
+          const origB = brick.def.color & 0xff;
+          mat.color.setRGB(
+            (origR * (1 - flash * 0.6) + 0xff * flash * 0.6) / 255,
+            (origG * (1 - flash * 0.6)) / 255,
+            (origB * (1 - flash * 0.6)) / 255,
+          );
+        }
+
+        if (wall.telegraphTimer <= 0) {
+          wall.phase = 'dropping';
+          this.executeSellWallDrop(wall);
+        }
+      } else if (wall.phase === 'paused') {
+        wall.pauseTimer -= dt;
+        if (wall.pauseTimer <= 0) {
+          if (wall.dropsRemaining <= 0) {
+            wall.phase = 'done';
+          } else {
+            wall.phase = 'telegraph';
+            wall.telegraphTimer = B.SELL_WALL_TELEGRAPH_MS / 1000;
+            if (this.sellWallAccelerated) wall.telegraphTimer *= 0.6;
+          }
+        }
+      }
+
+      if (wall.phase === 'done') {
+        this.sellWalls.splice(i, 1);
+      }
+    }
+  }
+
+  private spawnSellWall(cfg: NonNullable<NonNullable<import('./types/StageMeta').StageMechanics>['sellWalls']>) {
+    // Find a row with bricks to form a sell wall
+    const aliveBricks = this.bricks.filter(b => b.alive && !b.falling && !b.unstable &&
+      b.def.id !== 'indestructible' && b.row !== undefined && b.col !== undefined);
+    if (aliveBricks.length === 0) return;
+
+    // Pick a row that has enough bricks
+    const rowCounts = new Map<number, number>();
+    for (const b of aliveBricks) {
+      rowCounts.set(b.row!, (rowCounts.get(b.row!) ?? 0) + 1);
+    }
+    // Prefer upper rows (lower row numbers) for more dramatic descent
+    const eligibleRows = [...rowCounts.entries()]
+      .filter(([, count]) => count >= cfg.widthMin)
+      .sort(([a], [b]) => a - b);
+    if (eligibleRows.length === 0) return;
+
+    const [row] = eligibleRows[Math.floor(Math.random() * Math.min(3, eligibleRows.length))];
+
+    // Pick column span
+    const rowBricks = aliveBricks.filter(b => b.row === row);
+    const cols = rowBricks.map(b => b.col!).sort((a, b) => a - b);
+    const width = cfg.widthMin + Math.floor(Math.random() * (cfg.widthMax - cfg.widthMin + 1));
+    const startIdx = Math.floor(Math.random() * Math.max(1, cols.length - width + 1));
+    const selectedCols = cols.slice(startIdx, startIdx + width);
+    if (selectedCols.length < cfg.widthMin) return;
+
+    const colStart = selectedCols[0];
+    const colEnd = selectedCols[selectedCols.length - 1];
+
+    // Collect brick indices
+    const brickIndices: number[] = [];
+    for (let bi = 0; bi < this.bricks.length; bi++) {
+      const b = this.bricks[bi];
+      if (b.alive && b.row === row && b.col !== undefined &&
+          b.col >= colStart && b.col <= colEnd &&
+          !b.falling && !b.unstable && b.def.id !== 'indestructible') {
+        brickIndices.push(bi);
+      }
+    }
+    if (brickIndices.length === 0) return;
+
+    const wallId = this.sellWallIdCounter++;
+    for (const idx of brickIndices) {
+      this.bricks[idx].sellWallId = wallId;
+    }
+
+    this.sellWalls.push({
+      id: wallId,
+      brickIndices,
+      colStart, colEnd,
+      currentRow: row,
+      dropsRemaining: cfg.maxDrops,
+      telegraphTimer: B.SELL_WALL_TELEGRAPH_MS / 1000,
+      pauseTimer: 0,
+      phase: 'telegraph',
+    });
+
+    this.r.showCallout(GAME_WIDTH / 2, 60, 'SELL WALL!', '#ff2244', 16, true);
+  }
+
+  private executeSellWallDrop(wall: SellWall) {
+    const rowStep = B.BRICK_HEIGHT + B.BRICK_PADDING;
+
+    // Move each brick down by one row step
+    for (const idx of wall.brickIndices) {
+      const brick = this.bricks[idx];
+      if (!brick || !brick.alive || brick.falling || brick.unstable) continue;
+
+      brick.y += rowStep;
+      brick.row = (brick.row ?? 0) + 1;
+      this.r.setPos(brick.mesh, brick.x, brick.y);
+      // Restore original color
+      const core = brick.mesh.children[0] as THREE.LineSegments;
+      (core.material as THREE.LineBasicMaterial).color.setHex(brick.def.color);
+    }
+
+    wall.currentRow++;
+    wall.dropsRemaining--;
+
+    // Small screen shake / feedback
+    this.r.flash(0xff2244, 0.08);
+    audio.brickHit();
+
+    // Check if wall has reached danger zone
+    const maxY = Math.max(...wall.brickIndices.map(idx => this.bricks[idx]?.y ?? 0));
+    if (maxY >= B.SELL_WALL_DANGER_Y) {
+      // Wall reached paddle zone — punish player and dissolve
+      this.r.showCallout(GAME_WIDTH / 2, GAME_HEIGHT - 200, 'WALL BREACHED!', '#ff2244', 18, true);
+      this.r.flash(0xff2244, 0.3);
+      this.applyHazardHit();
+      this.adjustSentiment(-8);
+      wall.phase = 'done';
+      return;
+    }
+
+    // Set up pause before next drop
+    wall.pauseTimer = B.SELL_WALL_DROP_PAUSE_MS / 1000;
+    if (this.sellWallAccelerated) wall.pauseTimer *= 0.5;
+    wall.phase = 'paused';
   }
 
   private updateCombo(dt: number) {
@@ -1914,7 +2231,7 @@ export class Game {
     // If boss is active, level clears when boss is defeated (handled by onBossDefeatComplete)
     if (this.bossMode) return;
 
-    const remaining = this.bricks.filter(b => b.alive && (b.def.destructible || b.def.stable) && !b.falling);
+    const remaining = this.bricks.filter(b => b.alive && (b.def.destructible || b.def.stable) && !b.falling && !b.unstable);
     if (remaining.length === 0 && this.bricks.length > 0) {
       // Check if this stage has a boss
       const stageMeta = STAGE_META[this.currentLevel];

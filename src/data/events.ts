@@ -23,6 +23,7 @@ export const EVENT_DEFINITIONS: EventDefinition[] = [
       ctx.flashScreen(0xff2222, 0.35);
       ctx.adjustSentiment(-12);
       ctx.setHazardBias(2.0);
+      ctx.setSellWallAccelerated(true);
       ctx.addTickerMessage('FLASH CRASH IN PROGRESS');
     },
     applyTick: (_ctx, _dt, elapsed) => {
@@ -33,6 +34,7 @@ export const EVENT_DEFINITIONS: EventDefinition[] = [
     },
     applyEnd: (ctx) => {
       ctx.setHazardBias(1.0);
+      ctx.setSellWallAccelerated(false);
       ctx.addCallout(CX, CY, 'CRASH OVER', '#ffaa00', 24);
       ctx.addTickerMessage('FLASH CRASH SUBSIDES');
     },

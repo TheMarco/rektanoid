@@ -7,6 +7,7 @@ const D = 'drop';
 const U = 'sentimentUp';
 const R = 'sentimentDown';
 const F = 'fomo';
+const G = 'rug';
 const _ = null;
 
 // Two candlesticks: green pump on left, red dump on right — FOMO bricks add urgency
@@ -22,7 +23,7 @@ export const stage04: LevelDefinition = {
     [U, U, U, F, _, R, R, R],
     [U, U, U, D, _, R, R, R],
     [_, U, _, _, _, R, R, R],
-    [_, _, _, D, F, R, R, R],
+    [_, _, _, D, F, G, R, R],
     [_, _, _, _, _, R, R, R],
     [_, _, _, E, E, _, R, _],
   ],

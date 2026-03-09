@@ -9,6 +9,7 @@ const R = 'sentimentDown';
 const Z = 'hazard';
 const I = 'indestructible';
 const L = 'leverage';
+const G = 'rug';
 const _ = null;
 
 // Descending staircase chart — bear market crash with leveraged positions
@@ -21,10 +22,10 @@ export const stage06: LevelDefinition = {
   layout: [
     [R, R, R, R, _, _, _, _],
     [I, I, R, L, _, _, _, _],
-    [_, _, R, R, R, _, _, _],
+    [_, _, R, G, R, _, _, _],
     [_, _, I, I, R, L, _, _],
     [_, _, _, _, T, R, R, _],
-    [_, _, _, _, I, I, R, R],
+    [_, _, _, _, I, I, G, R],
     [_, _, _, _, _, _, H, R],
     [_, _, _, _, _, _, D, E],
   ],

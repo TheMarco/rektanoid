@@ -2213,6 +2213,52 @@ export class Renderer {
     this.addTempEffect(group, 50); // single frame, redrawn each frame
   }
 
+  /** Liquidation lane strike: fast downward bolt in a column */
+  drawLiqLaneStrike(gx: number, width: number, progress: number) {
+    const hw = width / 2;
+    const hh = GAME_HEIGHT / 2;
+    // Full-height column flash
+    const positions = [
+      -hw, -hh, 0, hw, -hh, 0,
+      hw, -hh, 0, hw, hh, 0,
+      hw, hh, 0, -hw, hh, 0,
+      -hw, hh, 0, -hw, -hh, 0,
+      // Cross lines for visual impact
+      -hw, -hh, 0, hw, hh, 0,
+      hw, -hh, 0, -hw, hh, 0,
+    ];
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    // Bright flash that fades
+    const intensity = 1 - progress;
+    const mat = new THREE.LineBasicMaterial({
+      color: 0xff4400, transparent: true,
+      opacity: 0.3 * intensity,
+      blending: THREE.AdditiveBlending,
+      depthTest: false,
+    });
+    const mesh = new THREE.LineSegments(geo, mat);
+    mesh.renderOrder = 46;
+
+    // Inner fill plane for the strike
+    const fillGeo = new THREE.PlaneGeometry(width, GAME_HEIGHT);
+    const fillMat = new THREE.MeshBasicMaterial({
+      color: 0xff4400, transparent: true,
+      opacity: 0.06 * intensity,
+      blending: THREE.AdditiveBlending,
+      depthTest: false,
+    });
+    const fill = new THREE.Mesh(fillGeo, fillMat);
+    fill.renderOrder = 45;
+
+    const wp = this.toWorld(gx, GAME_HEIGHT / 2);
+    const group = new THREE.Group();
+    group.add(mesh);
+    group.add(fill);
+    group.position.set(wp.x, wp.y, 1);
+    this.addTempEffect(group, 50);
+  }
+
   /** Telegraph indicator: pulsing line from boss toward target */
   drawTelegraphLine(fromGx: number, fromGy: number, toGx: number, toGy: number, color: number, progress: number) {
     const from = this.toWorld(fromGx, fromGy);
@@ -2332,7 +2378,21 @@ export class Renderer {
   }
 
   showCallout(gx: number, gy: number, text: string, color: string, size: number = 18, quick: boolean = false) {
-    this.activeCallouts.push({ text, color, size: size * 1.0, gx, gy, startTime: performance.now(), quick });
+    // Nudge vertically so callouts don't overlap existing ones
+    let finalGy = gy;
+    const minGap = size * 1.4; // minimum vertical distance between callouts
+    for (let attempt = 0; attempt < 5; attempt++) {
+      let overlaps = false;
+      for (const c of this.activeCallouts) {
+        if (Math.abs(c.gx - gx) < 120 && Math.abs(c.gy - finalGy) < minGap) {
+          overlaps = true;
+          break;
+        }
+      }
+      if (!overlaps) break;
+      finalGy -= minGap; // shift upward
+    }
+    this.activeCallouts.push({ text, color, size: size * 1.0, gx, gy: finalGy, startTime: performance.now(), quick });
   }
 
   updateHUD(data: {

@@ -57,3 +57,19 @@ export const LASER_DURATION = 8000;
 
 // ── Shield ──
 export const SHIELD_DURATION = 10000;
+
+// ── Rug-Pull Collapse ──
+export const RUG_UNSTABLE_DURATION = 0.65;  // seconds before unstable bricks start falling
+export const RUG_DEFAULT_RADIUS = 90;       // default collapse radius (overridden per stage)
+export const RUG_MAX_FALLING = 6;           // max simultaneously falling bricks from rug pulls
+
+// ── Liquidation Lanes ──
+export const LIQ_LANE_TELEGRAPH_MS = 1800;  // warning duration before strike
+export const LIQ_LANE_STRIKE_MS = 300;      // strike active duration
+export const LIQ_LANE_WIDTH = 54;           // lane width in game units (≈ 1 brick column)
+export const LIQ_LANE_STRIKE_SPEED = 900;   // downward speed of strike bolt
+
+// ── Sell Walls ──
+export const SELL_WALL_TELEGRAPH_MS = 1000;   // warning flash before drop
+export const SELL_WALL_DROP_PAUSE_MS = 2500;  // pause between successive drops
+export const SELL_WALL_DANGER_Y = 650;        // if wall reaches this y, punish player
