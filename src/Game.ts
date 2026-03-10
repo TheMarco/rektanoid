@@ -1276,7 +1276,7 @@ export class Game {
       // Update trail
       const wp = this.r.toWorld(ball.x, ball.y);
       ball.trailPositions.push(wp.x, wp.y, wp.z);
-      if (ball.trailPositions.length > 8 * 3) {
+      if (ball.trailPositions.length > 20 * 3) {
         ball.trailPositions.splice(0, 3);
       }
       this.r.updateBallTrail(ball.trail, ball.trailPositions);
