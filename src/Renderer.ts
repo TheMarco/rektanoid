@@ -3304,8 +3304,9 @@ export class Renderer {
     const cw = GAME_WIDTH * scale;
     const ch = GAME_HEIGHT * scale;
 
-    // Render at actual displayed pixel resolution for crisp CRT
-    const pr = Math.min(window.devicePixelRatio, 2);
+    // Mobile: render at 1x DPR to save fill rate; desktop: up to 2x
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const pr = isMobile ? 1 : Math.min(window.devicePixelRatio, 2);
     const renderW = Math.round(cw * pr);
     const renderH = Math.round(ch * pr);
     this.webgl.setSize(renderW, renderH, false);
