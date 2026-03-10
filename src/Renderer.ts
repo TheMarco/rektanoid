@@ -106,6 +106,7 @@ export class Renderer {
   private tempEffects: { group: THREE.Group; expiresAt: number }[] = [];
 
   // Pre-allocated particle pool (avoids per-frame allocations)
+  private readonly isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
   private static readonly MAX_PARTICLES = 256;
   private particlePositions = new Float32Array(256 * 3);
   private particleColors = new Float32Array(256 * 3);
@@ -1660,9 +1661,10 @@ export class Renderer {
   // ── Effects ──
 
   burst(gx: number, gy: number, color: number, count: number = 24) {
+    const n = this.isMobile ? Math.ceil(count / 2) : count;
     const [wx, wy] = [gx - HW, HH - gy];
-    for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2 + Math.random() * 0.5;
+    for (let i = 0; i < n; i++) {
+      const angle = (i / n) * Math.PI * 2 + Math.random() * 0.5;
       const speed = 140 + Math.random() * 250;
       this.pushParticle({
         x: wx, y: wy, z: 0,
@@ -1723,8 +1725,9 @@ export class Renderer {
     requestAnimationFrame(ringUpdate);
 
     // 2. Hot sparks — mix of white-hot and colored
-    for (let i = 0; i < 8; i++) {
-      const angle = (i / 8) * Math.PI * 2 + Math.random() * 0.6;
+    const shardSparks = this.isMobile ? 4 : 8;
+    for (let i = 0; i < shardSparks; i++) {
+      const angle = (i / shardSparks) * Math.PI * 2 + Math.random() * 0.6;
       const speed = 120 + Math.random() * 200;
       const isWhite = Math.random() < 0.5;
       this.pushParticle({
@@ -1740,7 +1743,8 @@ export class Renderer {
     }
 
     // 3. Particle burst — mix of colored and white
-    for (let i = 0; i < 35; i++) {
+    const shardBurst = this.isMobile ? 18 : 35;
+    for (let i = 0; i < shardBurst; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 100 + Math.random() * 260;
       this.pushParticle({
@@ -1757,7 +1761,8 @@ export class Renderer {
     }
 
     // 4. Spinning debris chunks — HDR bright
-    for (let i = 0; i < 5; i++) {
+    const shardDebris = this.isMobile ? 3 : 5;
+    for (let i = 0; i < shardDebris; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 80 + Math.random() * 180;
       const len = 5 + Math.random() * 10;
@@ -1848,8 +1853,9 @@ export class Renderer {
     requestAnimationFrame(ringUpdate);
 
     // 3. Primary burst — fast bright particles
-    for (let i = 0; i < 40; i++) {
-      const angle = (i / 40) * Math.PI * 2 + Math.random() * 0.4;
+    const expBurst1 = this.isMobile ? 20 : 40;
+    for (let i = 0; i < expBurst1; i++) {
+      const angle = (i / expBurst1) * Math.PI * 2 + Math.random() * 0.4;
       const speed = 200 + Math.random() * 350;
       this.pushParticle({
         x: wx + (Math.random() - 0.5) * 8,
@@ -1866,7 +1872,8 @@ export class Renderer {
     }
 
     // 4. Colored spark burst
-    for (let i = 0; i < 50; i++) {
+    const expBurst2 = this.isMobile ? 25 : 50;
+    for (let i = 0; i < expBurst2; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 100 + Math.random() * 280;
       this.pushParticle({
@@ -1883,7 +1890,8 @@ export class Renderer {
 
     // 5. Delayed secondary sparks (fire trail effect)
     setTimeout(() => {
-      for (let i = 0; i < 25; i++) {
+      const expDelay = this.isMobile ? 12 : 25;
+      for (let i = 0; i < expDelay; i++) {
         const angle = Math.random() * Math.PI * 2;
         const speed = 60 + Math.random() * 150;
         // Mix between the brick color and orange/yellow for fire
@@ -1904,7 +1912,8 @@ export class Renderer {
     }, 60);
 
     // 6. Slow embers that float upward
-    for (let i = 0; i < 15; i++) {
+    const expEmbers = this.isMobile ? 8 : 15;
+    for (let i = 0; i < expEmbers; i++) {
       this.pushParticle({
         x: wx + (Math.random() - 0.5) * 20,
         y: wy + (Math.random() - 0.5) * 20,
@@ -1920,7 +1929,8 @@ export class Renderer {
     }
 
     // 7. Spinning debris chunks (line segment objects)
-    for (let i = 0; i < 8; i++) {
+    const expDebris = this.isMobile ? 4 : 8;
+    for (let i = 0; i < expDebris; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 80 + Math.random() * 200;
       const len = 5 + Math.random() * 12;
@@ -3304,9 +3314,9 @@ export class Renderer {
     const cw = GAME_WIDTH * scale;
     const ch = GAME_HEIGHT * scale;
 
-    // Mobile: render at 1x DPR to save fill rate; desktop: up to 2x
+    // Mobile: render at 1.5x DPR to save fill rate; desktop: up to 2x
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    const pr = isMobile ? 1 : Math.min(window.devicePixelRatio, 2);
+    const pr = isMobile ? Math.min(window.devicePixelRatio, 1.5) : Math.min(window.devicePixelRatio, 2);
     const renderW = Math.round(cw * pr);
     const renderH = Math.round(ch * pr);
     this.webgl.setSize(renderW, renderH, false);
