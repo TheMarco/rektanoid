@@ -1730,14 +1730,13 @@ export class Renderer {
     for (let i = 0; i < shardSparks; i++) {
       const angle = (i / shardSparks) * Math.PI * 2 + Math.random() * 0.6;
       const speed = 120 + Math.random() * 200;
-      const isWhite = Math.random() < 0.5;
       this.pushParticle({
         x: wx, y: wy, z: Math.random() * 3,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
         vz: (Math.random() - 0.5) * 60,
         life: 1, decay: 0.6 + Math.random() * 0.5,
-        color: isWhite ? 0xffffff : color,
+        color,
         size: 14 + Math.random() * 12,
         hot: true,
       });
@@ -1756,7 +1755,7 @@ export class Renderer {
         vy: Math.sin(angle) * speed,
         vz: (Math.random() - 0.5) * 80,
         life: 1, decay: 0.6 + Math.random() * 0.8,
-        color: Math.random() < 0.3 ? 0xffffff : color,
+        color,
         size: 4 + Math.random() * 7,
       });
     }
@@ -1769,7 +1768,7 @@ export class Renderer {
       const len = 5 + Math.random() * 10;
       const debrisGeo = new THREE.BufferGeometry();
       debrisGeo.setAttribute('position', new THREE.Float32BufferAttribute([-len, 0, 0, len, 0, 0], 3));
-      const debrisColor = new THREE.Color().lerpColors(c, new THREE.Color(0xffffff), Math.random() * 0.5).multiplyScalar(2.0);
+      const debrisColor = new THREE.Color(c).multiplyScalar(2.0);
       const debrisMat = new THREE.LineBasicMaterial({
         color: debrisColor,
         transparent: true, opacity: 1.0,
@@ -1867,7 +1866,7 @@ export class Renderer {
         vz: (Math.random() - 0.5) * 120,
         life: 1,
         decay: 0.8 + Math.random() * 0.8,
-        color: 0xffffff,
+        color,
         size: 4 + Math.random() * 6,
       });
     }
@@ -1938,7 +1937,7 @@ export class Renderer {
       const debrisGeo = new THREE.BufferGeometry();
       debrisGeo.setAttribute('position', new THREE.Float32BufferAttribute([-len, 0, 0, len, 0, 0], 3));
       const debrisMat = new THREE.LineBasicMaterial({
-        color: new THREE.Color().lerpColors(c, new THREE.Color(0xffffff), Math.random() * 0.5),
+        color: new THREE.Color(c),
         transparent: true, opacity: 0.9,
         blending: THREE.AdditiveBlending, depthTest: false, fog: false, toneMapped: false,
       });

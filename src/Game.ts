@@ -1341,11 +1341,9 @@ export class Game {
 
   // ── Collisions (non-ball; ball collisions are in substep loop) ──
   private updateCollisions() {
-    if (!this.ballLaunched) return;
-
     const paddleY = GAME_HEIGHT - B.PADDLE_Y_OFFSET;
 
-    // Powerups vs paddle
+    // Powerups vs paddle (always active, even before ball launch)
     for (const pu of this.powerups) {
       if (!pu.alive) continue;
       if (this.rectRect(pu.x, pu.y, 20, 20,
@@ -1353,6 +1351,8 @@ export class Game {
         this.catchPowerup(pu);
       }
     }
+
+    if (!this.ballLaunched) return;
 
     // Lasers vs bricks
     for (let li = this.lasers.length - 1; li >= 0; li--) {
