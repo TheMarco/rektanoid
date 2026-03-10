@@ -135,6 +135,7 @@ export class Renderer {
   } | null = null;
   private tickerData: { sym: string; price: number; pct: number }[] = [];
   private tickerOffset = 0;
+  private lastTickerTime = 0;
   private activeCallouts: { text: string; color: string; size: number; gx: number; gy: number; startTime: number; quick: boolean }[] = [];
   private overlayHtml: string | null = null;
 
@@ -2556,7 +2557,10 @@ export class Renderer {
       }
 
       // Scroll
-      this.tickerOffset = (this.tickerOffset + 2.5) % totalWidth;
+      const now = performance.now();
+      const tickerDt = this.lastTickerTime ? (now - this.lastTickerTime) / 1000 : 0.016;
+      this.lastTickerTime = now;
+      this.tickerOffset = (this.tickerOffset + 150 * tickerDt) % totalWidth; // 150 px/sec
 
       let x = -this.tickerOffset;
       const cy = tickerH / 2;
