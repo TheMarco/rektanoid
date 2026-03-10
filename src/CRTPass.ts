@@ -36,7 +36,7 @@ const CRT_SHADER = {
 
     #define PI 3.14159265359
     #define MASK_STRENGTH 0.12
-    #define NOISE_STRENGTH 0.0008
+    #define NOISE_STRENGTH 0.0002
     #define FLICKER_STRENGTH 0.04
 
     // Virtual CRT resolution (scanline count)
