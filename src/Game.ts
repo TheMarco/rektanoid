@@ -1293,13 +1293,23 @@ export class Game {
       // Update visual
       this.r.setPos(ball.mesh, ball.x, ball.y);
 
-      // Update trail
+      // Update trail — distance-based for consistent length across frame rates
       const wp = this.r.toWorld(ball.x, ball.y);
-      ball.trailPositions.push(wp.x, wp.y, wp.z);
-      if (ball.trailPositions.length > 20 * 3) {
-        ball.trailPositions.splice(0, 3);
+      const tp = ball.trailPositions;
+      const MAX_TRAIL_LEN = 120; // max trail length in world units
+      tp.push(wp.x, wp.y, wp.z);
+      // Compute cumulative length from head (end) backwards, trim excess
+      let cumLen = 0;
+      let cutIdx = 0;
+      for (let j = tp.length - 3; j >= 3; j -= 3) {
+        const dx = tp[j] - tp[j - 3], dy = tp[j + 1] - tp[j - 2];
+        cumLen += Math.sqrt(dx * dx + dy * dy);
+        if (cumLen > MAX_TRAIL_LEN) { cutIdx = j - 3; break; }
       }
-      this.r.updateBallTrail(ball.trail, ball.trailPositions);
+      if (cutIdx > 0) tp.splice(0, cutIdx);
+      // Hard cap on point count for the geometry buffer
+      while (tp.length > 20 * 3) tp.splice(0, 3);
+      this.r.updateBallTrail(ball.trail, tp);
 
       // Ball lost
       if (ball.y > GAME_HEIGHT + 20) {
