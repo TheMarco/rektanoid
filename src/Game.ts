@@ -121,6 +121,9 @@ export class Game {
 
   // Bricks
   private bricks: BrickInst[] = [];
+  private brickGrid: (BrickInst | null)[][] = [];   // [row][col] spatial lookup
+  private looseBricks: BrickInst[] = [];             // boss-spawned / event bricks without grid pos
+  private brickCandidates: BrickInst[] = [];         // reusable array for spatial query results
 
   // Powerups
   private powerups: PowerupInst[] = [];
@@ -540,7 +543,16 @@ export class Game {
     const level = LEVEL_ORDER[index];
     if (!level) return;
 
+    // Initialize spatial grid
     const layout = level.layout;
+    const gridRows = layout.length;
+    const gridCols = gridRows > 0 ? layout[0].length : B.BRICK_COLS;
+    this.brickGrid = [];
+    for (let r = 0; r < gridRows; r++) {
+      this.brickGrid[r] = new Array(gridCols).fill(null);
+    }
+    this.looseBricks = [];
+
     for (let row = 0; row < layout.length; row++) {
       for (let col = 0; col < layout[row].length; col++) {
         const typeId = layout[row][col];
@@ -560,14 +572,20 @@ export class Game {
         if (def.leverage) inst.scoreValue = def.score;
         if (def.stable) inst.depegged = false;
         this.bricks.push(inst);
+        this.brickGrid[row][col] = inst;
       }
     }
   }
 
   // ── Game loop ──
+  private frameAccum = 0;
+  private static readonly FRAME_INTERVAL = 1000 / 60; // lock to 60fps
+
   private loop = (now: number) => {
     this.animId = requestAnimationFrame(this.loop);
-    const dt = Math.min((now - this.lastTime) / 1000, 0.05); // cap at 50ms
+    const elapsed = now - this.lastTime;
+    if (elapsed < Game.FRAME_INTERVAL * 0.95) return; // skip if too soon (0.95 for timing jitter)
+    const dt = Math.min(elapsed / 1000, 0.05); // cap at 50ms
     this.lastTime = now;
 
     if (this.state === 'playing') {
@@ -959,7 +977,9 @@ export class Game {
             const mesh = this.r.makeBrick(def, B.BRICK_WIDTH * 0.7, B.BRICK_HEIGHT * 0.8);
             this.r.scene.add(mesh);
             this.r.setPos(mesh, bx, shieldY);
-            this.bricks.push({ def, hp: def.hp, x: bx, y: shieldY, alive: true, mesh, isBossSupport: true });
+            const bossInst: BrickInst = { def, hp: def.hp, x: bx, y: shieldY, alive: true, mesh, isBossSupport: true };
+            this.bricks.push(bossInst);
+            this.looseBricks.push(bossInst);
             spawned++;
           }
           if (spawned > 0) {
@@ -1436,13 +1456,47 @@ export class Game {
     }
   }
 
+  // ── Spatial grid lookup: return nearby bricks for collision ──
+  private getBrickCandidates(bx: number, by: number): BrickInst[] {
+    this.brickCandidates.length = 0;
+    const cellW = B.BRICK_WIDTH + B.BRICK_PADDING;
+    const cellH = B.BRICK_HEIGHT + B.BRICK_PADDING;
+    const col = Math.floor((bx - B.BRICK_OFFSET_X) / cellW);
+    const row = Math.floor((by - B.BRICK_OFFSET_Y) / cellH);
+    const gridRows = this.brickGrid.length;
+    const gridCols = gridRows > 0 ? this.brickGrid[0].length : 0;
+
+    for (let dr = -1; dr <= 1; dr++) {
+      const r = row + dr;
+      if (r < 0 || r >= gridRows) continue;
+      for (let dc = -1; dc <= 1; dc++) {
+        const c = col + dc;
+        if (c < 0 || c >= gridCols) continue;
+        const brick = this.brickGrid[r][c];
+        if (brick && brick.alive) {
+          this.brickCandidates.push(brick);
+        }
+      }
+    }
+
+    // Always include loose bricks (boss-spawned, event bricks at arbitrary positions)
+    for (let i = 0; i < this.looseBricks.length; i++) {
+      const brick = this.looseBricks[i];
+      if (brick.alive) {
+        this.brickCandidates.push(brick);
+      }
+    }
+
+    return this.brickCandidates;
+  }
+
   // ── Brick collision (spec §16-18): single best brick per substep ──
   private resolveBallBricks(ball: Ball) {
     let bestBrick: BrickInst | null = null;
     let bestPen = Infinity;
     let bestAxis: 'x' | 'y' = 'y';
 
-    for (const brick of this.bricks) {
+    for (const brick of this.getBrickCandidates(ball.x, ball.y)) {
       if (!brick.alive) continue;
       if (!this.circleRect(ball.x, ball.y, B.BALL_RADIUS, brick.x, brick.y, B.BRICK_WIDTH, B.BRICK_HEIGHT)) continue;
 
@@ -2029,6 +2083,12 @@ export class Game {
           brick.falling = true;
           brick.fallingVy = 30 + Math.random() * 50;
           coreMat.color.setHex(0x9933ff);
+          // Move from spatial grid to loose bricks since position will change
+          if (brick.row != null && brick.col != null &&
+              this.brickGrid[brick.row]?.[brick.col] === brick) {
+            this.brickGrid[brick.row][brick.col] = null;
+          }
+          this.looseBricks.push(brick);
         }
       }
 
@@ -2383,6 +2443,8 @@ export class Game {
       if (b.mesh.parent) this.r.remove(b.mesh);
     }
     this.bricks = [];
+    this.brickGrid = [];
+    this.looseBricks = [];
 
     // Remove powerups
     for (const pu of this.powerups) this.r.remove(pu.mesh);

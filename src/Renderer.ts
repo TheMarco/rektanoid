@@ -105,6 +105,18 @@ export class Renderer {
   private particles: Particle[] = [];
   private tempEffects: { group: THREE.Group; expiresAt: number }[] = [];
 
+  // Pre-allocated particle pool (avoids per-frame allocations)
+  private static readonly MAX_PARTICLES = 256;
+  private particlePositions = new Float32Array(256 * 3);
+  private particleColors = new Float32Array(256 * 3);
+  private particleSizes = new Float32Array(256);
+  private particleHots = new Float32Array(256);
+  private particleGeo: THREE.BufferGeometry | null = null;
+  private particlePosAttr: THREE.BufferAttribute | null = null;
+  private particleColAttr: THREE.BufferAttribute | null = null;
+  private particleSizeAttr: THREE.BufferAttribute | null = null;
+  private particleHotAttr: THREE.BufferAttribute | null = null;
+
   // 2D canvas HUD rendered via separate scene (goes through CRT)
   private hudCanvas: HTMLCanvasElement;
   private hudCtx: CanvasRenderingContext2D;
@@ -128,6 +140,7 @@ export class Renderer {
 
   // Canvas-based overlay screens (rendered through CRT)
   private overlayScreen: OverlayScreen | null = null;
+  private hudDirty = true;
   private riskButtonRects: { id: string; gx: number; gy: number; gw: number; gh: number }[] = [];
   private selectedRiskId: string = 'margin';
   private logoImg: HTMLImageElement | null = null;
@@ -197,7 +210,7 @@ export class Renderer {
     this.composer.addPass(hudRenderPass);
 
     this.bloom = new UnrealBloomPass(
-      new THREE.Vector2(GAME_WIDTH, GAME_HEIGHT),
+      new THREE.Vector2(Math.floor(GAME_WIDTH/2), Math.floor(GAME_HEIGHT/2)),
       initialTheme.bloomStrength,  // strength
       initialTheme.bloomRadius, // radius
       0.03,  // threshold
@@ -1650,7 +1663,7 @@ export class Renderer {
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2 + Math.random() * 0.5;
       const speed = 140 + Math.random() * 250;
-      this.particles.push({
+      this.pushParticle({
         x: wx, y: wy, z: 0,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
@@ -1713,7 +1726,7 @@ export class Renderer {
       const angle = (i / 8) * Math.PI * 2 + Math.random() * 0.6;
       const speed = 120 + Math.random() * 200;
       const isWhite = Math.random() < 0.5;
-      this.particles.push({
+      this.pushParticle({
         x: wx, y: wy, z: Math.random() * 3,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
@@ -1729,7 +1742,7 @@ export class Renderer {
     for (let i = 0; i < 35; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 100 + Math.random() * 260;
-      this.particles.push({
+      this.pushParticle({
         x: wx + (Math.random() - 0.5) * 6,
         y: wy + (Math.random() - 0.5) * 6,
         z: 0,
@@ -1837,7 +1850,7 @@ export class Renderer {
     for (let i = 0; i < 40; i++) {
       const angle = (i / 40) * Math.PI * 2 + Math.random() * 0.4;
       const speed = 200 + Math.random() * 350;
-      this.particles.push({
+      this.pushParticle({
         x: wx + (Math.random() - 0.5) * 8,
         y: wy + (Math.random() - 0.5) * 8,
         z: Math.random() * 5,
@@ -1855,7 +1868,7 @@ export class Renderer {
     for (let i = 0; i < 50; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 100 + Math.random() * 280;
-      this.particles.push({
+      this.pushParticle({
         x: wx, y: wy, z: 0,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
@@ -1874,7 +1887,7 @@ export class Renderer {
         const speed = 60 + Math.random() * 150;
         // Mix between the brick color and orange/yellow for fire
         const fireColors = [color, 0xff6600, 0xffaa00, 0xffdd44];
-        this.particles.push({
+        this.pushParticle({
           x: wx + (Math.random() - 0.5) * 30,
           y: wy + (Math.random() - 0.5) * 30,
           z: Math.random() * 3,
@@ -1891,7 +1904,7 @@ export class Renderer {
 
     // 6. Slow embers that float upward
     for (let i = 0; i < 15; i++) {
-      this.particles.push({
+      this.pushParticle({
         x: wx + (Math.random() - 0.5) * 20,
         y: wy + (Math.random() - 0.5) * 20,
         z: 0,
@@ -1968,11 +1981,21 @@ export class Renderer {
 
   // ── Particles update ──
   updateParticles(dt: number) {
-    // Remove dead particles
-    this.particles = this.particles.filter(p => p.life > 0);
+    // Compact in-place: remove dead particles by swapping with last
+    const ps = this.particles;
+    let i = 0;
+    while (i < ps.length) {
+      if (ps[i].life <= 0) {
+        ps[i] = ps[ps.length - 1];
+        ps.pop();
+      } else {
+        i++;
+      }
+    }
 
     // Update living particles
-    for (const p of this.particles) {
+    for (let j = 0; j < ps.length; j++) {
+      const p = ps[j];
       p.x += p.vx * dt;
       p.y += p.vy * dt;
       p.z += p.vz * dt;
@@ -1980,8 +2003,13 @@ export class Renderer {
       p.life -= p.decay * dt;
     }
 
-    // Rebuild particle mesh
-    this.rebuildParticleMesh();
+    // Update particle mesh buffers
+    this.updateParticleMesh();
+  }
+
+  private pushParticle(p: Particle) {
+    if (this.particles.length >= Renderer.MAX_PARTICLES) return;
+    this.particles.push(p);
   }
 
   private particleMesh: THREE.Points | null = null;
@@ -2042,23 +2070,41 @@ export class Renderer {
     return this.particleShaderMat;
   }
 
-  private rebuildParticleMesh() {
-    if (this.particleMesh) {
-      this.fxGroup.remove(this.particleMesh);
-      this.particleMesh.geometry.dispose();
-    }
+  private ensureParticleMesh() {
+    if (this.particleMesh) return;
 
-    if (this.particles.length === 0) {
-      this.particleMesh = null;
-      return;
-    }
+    const MAX = Renderer.MAX_PARTICLES;
+    this.particleGeo = new THREE.BufferGeometry();
+
+    this.particlePosAttr = new THREE.BufferAttribute(this.particlePositions, 3);
+    this.particlePosAttr.setUsage(THREE.DynamicDrawUsage);
+    this.particleColAttr = new THREE.BufferAttribute(this.particleColors, 3);
+    this.particleColAttr.setUsage(THREE.DynamicDrawUsage);
+    this.particleSizeAttr = new THREE.BufferAttribute(this.particleSizes, 1);
+    this.particleSizeAttr.setUsage(THREE.DynamicDrawUsage);
+    this.particleHotAttr = new THREE.BufferAttribute(this.particleHots, 1);
+    this.particleHotAttr.setUsage(THREE.DynamicDrawUsage);
+
+    this.particleGeo.setAttribute('position', this.particlePosAttr);
+    this.particleGeo.setAttribute('color', this.particleColAttr);
+    this.particleGeo.setAttribute('size', this.particleSizeAttr);
+    this.particleGeo.setAttribute('hot', this.particleHotAttr);
+    this.particleGeo.setDrawRange(0, 0);
+
+    this.particleMesh = new THREE.Points(this.particleGeo, this.getParticleShader());
+    this.particleMesh.renderOrder = 100;
+    this.fxGroup.add(this.particleMesh);
+  }
+
+  private updateParticleMesh() {
+    this.ensureParticleMesh();
 
     const n = this.particles.length;
-    const positions = new Float32Array(n * 3);
-    const colors = new Float32Array(n * 3);
-    const sizes = new Float32Array(n);
-    const hots = new Float32Array(n);
     const color = new THREE.Color();
+    const positions = this.particlePositions;
+    const colors = this.particleColors;
+    const sizes = this.particleSizes;
+    const hots = this.particleHots;
 
     for (let i = 0; i < n; i++) {
       const p = this.particles[i];
@@ -2074,15 +2120,11 @@ export class Renderer {
       hots[i] = p.hot ? 1.0 : 0.0;
     }
 
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    geo.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1));
-    geo.setAttribute('hot', new THREE.Float32BufferAttribute(hots, 1));
-
-    this.particleMesh = new THREE.Points(geo, this.getParticleShader());
-    this.particleMesh.renderOrder = 100;
-    this.fxGroup.add(this.particleMesh);
+    this.particlePosAttr!.needsUpdate = true;
+    this.particleColAttr!.needsUpdate = true;
+    this.particleSizeAttr!.needsUpdate = true;
+    this.particleHotAttr!.needsUpdate = true;
+    this.particleGeo!.setDrawRange(0, n);
   }
 
   // ── Temp Effects ──
@@ -2393,6 +2435,7 @@ export class Renderer {
       finalGy -= minGap; // shift upward
     }
     this.activeCallouts.push({ text, color, size: size * 1.0, gx, gy: finalGy, startTime: performance.now(), quick });
+    this.hudDirty = true;
   }
 
   updateHUD(data: {
@@ -2406,6 +2449,7 @@ export class Renderer {
     riskColor?: string;
   }) {
     this.hudData = data;
+    this.hudDirty = true;
   }
 
   showOverlay(html: string) {
@@ -2414,6 +2458,7 @@ export class Renderer {
     this.overlayEl.style.display = 'flex';
     this.overlayEl.style.position = 'absolute';
     this.overlayEl.style.zIndex = '20';
+    this.hudDirty = true;
   }
 
   hideOverlay() {
@@ -2421,6 +2466,7 @@ export class Renderer {
     this.overlayEl.style.display = 'none';
     this.overlayScreen = null;
     this.riskButtonRects = [];
+    this.hudDirty = true;
   }
 
   /** Set a canvas-based overlay screen (rendered through CRT) */
@@ -2428,6 +2474,7 @@ export class Renderer {
     this.overlayScreen = screen;
     this.overlayHtml = null;
     this.overlayEl.style.display = 'none';
+    this.hudDirty = true;
     if (screen.type === 'menu') {
       this.riskButtonRects = [];
       this.selectedRiskId = 'margin';
@@ -2466,6 +2513,10 @@ export class Renderer {
 
   /** Render all HUD/ticker/callouts to the canvas texture */
   private renderHudCanvas() {
+    const needsRedraw = this.hudDirty || this.activeCallouts.length > 0 || this.tickerData.length > 0 || this.overlayScreen !== null;
+    if (!needsRedraw) return;
+    this.hudDirty = false;
+
     const W = this.hudCanvas.width;
     const H = this.hudCanvas.height;
     const ctx = this.hudCtx;
@@ -3255,7 +3306,7 @@ export class Renderer {
     const renderH = Math.round(ch * pr);
     this.webgl.setSize(renderW, renderH, false);
     this.composer.setSize(renderW, renderH);
-    this.bloom.resolution.set(renderW, renderH);
+    this.bloom.resolution.set(Math.floor(renderW/2), Math.floor(renderH/2));
     this.crt.uniforms.resolution.value.set(renderW, renderH);
 
     const canvas = this.webgl.domElement;
