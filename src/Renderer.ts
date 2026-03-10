@@ -76,16 +76,16 @@ const LEVEL_THEMES: {
   bloomRadius: number;
   exposure: number;
 }[] = [
-  { bg: 0x010a06, fog: 0x021a0c, accent: 0x00ff88, fogDensity: 0.0013, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.15 }, // Genesis Block
-  { bg: 0x010a06, fog: 0x021a0c, accent: 0x00ff88, fogDensity: 0.0012, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.15 }, // Bull Trap
-  { bg: 0x180709, fog: 0x3a1115, accent: 0xff4b44, fogDensity: 0.0010, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.22 }, // Liquidation
-  { bg: 0x0a0800, fog: 0x1a1000, accent: 0xffaa00, fogDensity: 0.0013, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.15 }, // Pump & Dump
-  { bg: 0x020810, fog: 0x041420, accent: 0x44ddff, fogDensity: 0.0014, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.15 }, // Diamond Hands
-  { bg: 0x180709, fog: 0x381117, accent: 0xff5160, fogDensity: 0.0010, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.22 }, // Bear Market
-  { bg: 0x060804, fog: 0x0c1008, accent: 0xffaa00, fogDensity: 0.0013, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.15 }, // Halving
-  { bg: 0x020810, fog: 0x041420, accent: 0x44ddff, fogDensity: 0.0014, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.12 }, // DeFi Maze
-  { bg: 0x190809, fog: 0x3d1512, accent: 0xff5c47, fogDensity: 0.0010, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.24 }, // Margin Call
-  { bg: 0x060210, fog: 0x0c0420, accent: 0x8844ff, fogDensity: 0.0014, bloomStrength: 0.45, bloomRadius: 0.40, exposure: 1.15 }, // Flippening
+  { bg: 0x010a06, fog: 0x021a0c, accent: 0x00ff88, fogDensity: 0.0013, bloomStrength: 0.225, bloomRadius: 0.40, exposure: 1.15 }, // Genesis Block
+  { bg: 0x010a06, fog: 0x021a0c, accent: 0x00ff88, fogDensity: 0.0012, bloomStrength: 0.225, bloomRadius: 0.40, exposure: 1.15 }, // Bull Trap
+  { bg: 0x180709, fog: 0x3a1115, accent: 0xff4b44, fogDensity: 0.0010, bloomStrength: 0.225, bloomRadius: 0.40, exposure: 1.22 }, // Liquidation
+  { bg: 0x0a0800, fog: 0x1a1000, accent: 0xffaa00, fogDensity: 0.0013, bloomStrength: 0.225, bloomRadius: 0.40, exposure: 1.15 }, // Pump & Dump
+  { bg: 0x020810, fog: 0x041420, accent: 0x44ddff, fogDensity: 0.0014, bloomStrength: 0.225, bloomRadius: 0.40, exposure: 1.15 }, // Diamond Hands
+  { bg: 0x180709, fog: 0x381117, accent: 0xff5160, fogDensity: 0.0010, bloomStrength: 0.225, bloomRadius: 0.40, exposure: 1.22 }, // Bear Market
+  { bg: 0x060804, fog: 0x0c1008, accent: 0xffaa00, fogDensity: 0.0013, bloomStrength: 0.225, bloomRadius: 0.40, exposure: 1.15 }, // Halving
+  { bg: 0x020810, fog: 0x041420, accent: 0x44ddff, fogDensity: 0.0014, bloomStrength: 0.225, bloomRadius: 0.40, exposure: 1.12 }, // DeFi Maze
+  { bg: 0x190809, fog: 0x3d1512, accent: 0xff5c47, fogDensity: 0.0010, bloomStrength: 0.225, bloomRadius: 0.40, exposure: 1.24 }, // Margin Call
+  { bg: 0x060210, fog: 0x0c0420, accent: 0x8844ff, fogDensity: 0.0014, bloomStrength: 0.225, bloomRadius: 0.40, exposure: 1.15 }, // Flippening
 ];
 
 export class Renderer {
@@ -215,8 +215,9 @@ export class Renderer {
       new THREE.Vector2(Math.floor(GAME_WIDTH/2), Math.floor(GAME_HEIGHT/2)),
       initialTheme.bloomStrength,  // strength
       initialTheme.bloomRadius, // radius
-      0.03,  // threshold
+      0.15,  // threshold
     );
+    this.bloom.enabled = false; // Disabled — CRT shader handles glow, bloom caused non-uniform haze
     this.composer.addPass(this.bloom);
     this.crt = createCRTPass();
     this.composer.addPass(this.crt);
@@ -492,7 +493,7 @@ export class Renderer {
       new THREE.PlaneGeometry(w - 2, h - 2),
       new THREE.MeshBasicMaterial({
         color: def.color, transparent: true, opacity: fillOpacity,
-        side: THREE.DoubleSide,
+        side: THREE.DoubleSide, fog: false,
       }));
     group.add(fill);
 
@@ -571,7 +572,7 @@ export class Renderer {
       new THREE.PlaneGeometry(bodyW - 1, bodyH - 1),
       new THREE.MeshBasicMaterial({
         color: def.color, transparent: true, opacity: isGreen ? 0.08 : 0.10,
-        side: THREE.DoubleSide,
+        side: THREE.DoubleSide, fog: false,
       }));
     group.add(fill);
 
@@ -750,7 +751,7 @@ export class Renderer {
       new THREE.PlaneGeometry(w - 2, h - 2),
       new THREE.MeshBasicMaterial({
         color: 0x44ddff, transparent: true, opacity: 0.04,
-        side: THREE.DoubleSide,
+        side: THREE.DoubleSide, fog: false,
       }));
     group.add(fill);
 
@@ -1225,7 +1226,7 @@ export class Renderer {
     // Fill
     group.add(new THREE.Mesh(
       new THREE.PlaneGeometry(def.width - 4, def.height - 4),
-      new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.03, side: THREE.DoubleSide })));
+      new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.03, side: THREE.DoubleSide, fog: false })));
 
     // Glow (body outline)
     const glowMesh = this.bossLineGroup(body, def.color, 0.2, 0.10, true, 'glow');
@@ -1375,7 +1376,7 @@ export class Renderer {
     // Fill
     group.add(new THREE.Mesh(
       new THREE.PlaneGeometry(def.width - 4, def.height - 4),
-      new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.03, side: THREE.DoubleSide })));
+      new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.03, side: THREE.DoubleSide, fog: false })));
 
     // Glow
     const glowMesh = this.bossLineGroup(body, def.color, 0.2, 0.10, true, 'glow');
@@ -1593,7 +1594,7 @@ export class Renderer {
     // Fill
     group.add(new THREE.Mesh(
       new THREE.PlaneGeometry(def.width - 4, def.height - 4),
-      new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.03, side: THREE.DoubleSide })));
+      new THREE.MeshBasicMaterial({ color: def.color, transparent: true, opacity: 0.03, side: THREE.DoubleSide, fog: false })));
 
     // Glow
     const glowMesh = this.bossLineGroup(body, def.color, 0.2, 0.10, true, 'glow');
@@ -2341,7 +2342,7 @@ export class Renderer {
     fog.density = theme.fogDensity;
     this.bloom.strength = theme.bloomStrength;
     this.bloom.radius = theme.bloomRadius;
-    this.bloom.threshold = 0.03;
+    this.bloom.threshold = 0.15;
     this.webgl.toneMappingExposure = theme.exposure;
   }
 
@@ -2539,7 +2540,7 @@ export class Renderer {
     // ── Ticker tape (top) ──
     if (this.tickerData.length > 0) {
       const tickerH = 36 * sy;
-      ctx.fillStyle = 'rgba(0, 2, 8, 0.6)';
+      ctx.fillStyle = 'rgba(0, 2, 8, 0.25)';
       ctx.fillRect(0, 0, W, tickerH);
 
       ctx.save();
@@ -2558,7 +2559,7 @@ export class Renderer {
         const sign = c.pct >= 0 ? '+' : '';
         const priceStr = c.price >= 1 ? c.price.toFixed(2) : c.price.toFixed(4);
         const label = `${c.sym} $${priceStr} ${sign}${c.pct.toFixed(1)}%`;
-        const color = c.pct >= 0 ? '#00ff66' : '#ff5555';
+        const color = c.pct >= 0 ? '#33aa55' : '#aa4444';
         const w = ctx.measureText(label).width;
         segments.push({ text: label, color, width: w });
         const sepW = ctx.measureText('  |  ').width;
@@ -3314,11 +3315,9 @@ export class Renderer {
     const cw = GAME_WIDTH * scale;
     const ch = GAME_HEIGHT * scale;
 
-    // Mobile: render at 1.5x DPR to save fill rate; desktop: up to 2x
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    const pr = isMobile ? Math.min(window.devicePixelRatio, 1.5) : Math.min(window.devicePixelRatio, 2);
-    const renderW = Math.round(cw * pr);
-    const renderH = Math.round(ch * pr);
+    // Render at native game resolution — CRT shader adds analog character
+    const renderW = GAME_WIDTH;
+    const renderH = GAME_HEIGHT;
     this.webgl.setSize(renderW, renderH, false);
     this.composer.setSize(renderW, renderH);
     this.bloom.resolution.set(Math.floor(renderW/2), Math.floor(renderH/2));
