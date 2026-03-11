@@ -91,6 +91,24 @@ export const POWERUP_TYPES: Record<string, PowerupDefinition> = {
     color: 0xff8800,
     label: 'FAST',
   },
+  rugPull: {
+    id: 'rugPull',
+    name: 'Rug Pull',
+    positive: false,
+    duration: 6000,
+    renderKey: 'rugPull',
+    color: 0xff3366,
+    label: 'SLIPPERY',
+  },
+  deadCat: {
+    id: 'deadCat',
+    name: 'Dead Cat Bounce',
+    positive: false,
+    duration: 5000,
+    renderKey: 'deadCat',
+    color: 0xaa33ff,
+    label: 'CHAOS',
+  },
 };
 
 export const POSITIVE_POWERUPS = Object.values(POWERUP_TYPES).filter(p => p.positive);

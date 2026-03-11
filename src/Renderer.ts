@@ -993,41 +993,92 @@ export class Renderer {
     trail.geometry.setDrawRange(0, indices.length);
   }
 
-  makePowerup(color: number): THREE.Group {
+  makePowerup(color: number, positive: boolean): THREE.Group {
     const group = new THREE.Group();
-    const geo = new THREE.EdgesGeometry(new THREE.OctahedronGeometry(10, 0));
-    const thickGeo = thickenEdgesGeo(geo, 0.08, 2);
 
-    // Bright wireframe core — HDR color for bloom
-    const core = new THREE.LineSegments(thickGeo,
-      new THREE.LineBasicMaterial({
-        color: 0xffffff, transparent: true, opacity: 0.95,
-        fog: false, toneMapped: false,
-      }));
-    core.renderOrder = 5;
-    group.add(core);
+    if (positive) {
+      // ── Positive: octahedron (diamond shape) ──
+      const geo = new THREE.EdgesGeometry(new THREE.OctahedronGeometry(10, 0));
+      const thickGeo = thickenEdgesGeo(geo, 0.08, 2);
 
-    // Inner glow sphere — white-hot center
-    const glowSphere = new THREE.Mesh(
-      new THREE.OctahedronGeometry(7, 0),
-      new THREE.MeshBasicMaterial({
-        color: 0xffffff, transparent: true, opacity: 0.4,
-        blending: THREE.AdditiveBlending,
-        depthTest: false, toneMapped: false,
-      }));
-    group.add(glowSphere);
+      const core = new THREE.LineSegments(thickGeo,
+        new THREE.LineBasicMaterial({
+          color: 0xffffff, transparent: true, opacity: 0.95,
+          fog: false, toneMapped: false,
+        }));
+      core.renderOrder = 5;
+      group.add(core);
 
-    // Outer colored halo
-    const glow = new THREE.LineSegments(thickGeo.clone(),
-      new THREE.LineBasicMaterial({
-        color, transparent: true, opacity: 0.4,
-        blending: THREE.AdditiveBlending,
-        depthTest: false, depthWrite: false,
-        fog: false, toneMapped: false,
-      }));
-    glow.scale.setScalar(1.5);
-    glow.renderOrder = 4;
-    group.add(glow);
+      const glowSphere = new THREE.Mesh(
+        new THREE.OctahedronGeometry(7, 0),
+        new THREE.MeshBasicMaterial({
+          color: 0xffffff, transparent: true, opacity: 0.4,
+          blending: THREE.AdditiveBlending,
+          depthTest: false, toneMapped: false,
+        }));
+      group.add(glowSphere);
+
+      const glow = new THREE.LineSegments(thickGeo.clone(),
+        new THREE.LineBasicMaterial({
+          color, transparent: true, opacity: 0.4,
+          blending: THREE.AdditiveBlending,
+          depthTest: false, depthWrite: false,
+          fog: false, toneMapped: false,
+        }));
+      glow.scale.setScalar(1.5);
+      glow.renderOrder = 4;
+      group.add(glow);
+    } else {
+      // ── Negative: downward-pointing tetrahedron (warning shape) ──
+      // Build a custom downward triangle pyramid
+      const s = 10;
+      const positions: number[] = [];
+      // Three top vertices forming a triangle + one bottom apex
+      const top0: [number, number, number] = [-s * 0.8, s * 0.5, s * 0.45];
+      const top1: [number, number, number] = [s * 0.8, s * 0.5, s * 0.45];
+      const top2: [number, number, number] = [0, s * 0.5, -s * 0.6];
+      const apex: [number, number, number] = [0, -s * 0.9, 0];
+      // Top triangle
+      positions.push(...top0, ...top1, ...top1, ...top2, ...top2, ...top0);
+      // Edges to apex
+      positions.push(...top0, ...apex, ...top1, ...apex, ...top2, ...apex);
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      const thickGeo = thickenGeo(geo, 0.5, 3);
+
+      // Red-tinted wireframe core
+      const core = new THREE.LineSegments(thickGeo,
+        new THREE.LineBasicMaterial({
+          color: 0xff4444, transparent: true, opacity: 0.95,
+          fog: false, toneMapped: false,
+        }));
+      core.renderOrder = 5;
+      group.add(core);
+
+      // Inner glow — red warning
+      const innerGeo = new THREE.TetrahedronGeometry(7, 0);
+      innerGeo.rotateX(Math.PI); // point down
+      const glowSphere = new THREE.Mesh(innerGeo,
+        new THREE.MeshBasicMaterial({
+          color: 0xff2222, transparent: true, opacity: 0.3,
+          blending: THREE.AdditiveBlending,
+          depthTest: false, toneMapped: false,
+        }));
+      group.add(glowSphere);
+
+      // Outer warning halo — red/orange
+      const glow = new THREE.LineSegments(thickGeo.clone(),
+        new THREE.LineBasicMaterial({
+          color: 0xff2200, transparent: true, opacity: 0.4,
+          blending: THREE.AdditiveBlending,
+          depthTest: false, depthWrite: false,
+          fog: false, toneMapped: false,
+        }));
+      glow.scale.setScalar(1.5);
+      glow.renderOrder = 4;
+      group.add(glow);
+    }
 
     group.userData.bloom = true;
     return group;

@@ -153,6 +153,8 @@ export class Game {
   private sentimentValue = B.SENTIMENT_START;
   private sentimentState = SentimentState.Neutral;
   private piercing = false;
+  private slippery = false;
+  private chaosAngle = false;
   private levelClearing = false;
   private gameTime = 0;
 
@@ -371,6 +373,8 @@ export class Game {
     this.sentimentValue = B.SENTIMENT_START;
     this.sentimentState = SentimentState.Neutral;
     this.piercing = false;
+    this.slippery = false;
+    this.chaosAngle = false;
     this.laserActive = false;
     this.levelClearing = false;
     this.gameTime = 0;
@@ -1218,11 +1222,18 @@ export class Game {
     }
 
     if (this.useMouseControl) {
-      this.paddleX = clamp(this.mouseX, this.paddleWidth / 2, GAME_WIDTH - this.paddleWidth / 2);
+      if (this.slippery) {
+        // Slippery: paddle slides toward target with heavy inertia
+        const target = clamp(this.mouseX, this.paddleWidth / 2, GAME_WIDTH - this.paddleWidth / 2);
+        this.paddleX += (target - this.paddleX) * 0.06;
+      } else {
+        this.paddleX = clamp(this.mouseX, this.paddleWidth / 2, GAME_WIDTH - this.paddleWidth / 2);
+      }
     } else {
       let vx = 0;
       if (this.keys['ArrowLeft'] || this.keys['KeyA']) vx = -B.PADDLE_SPEED;
       if (this.keys['ArrowRight'] || this.keys['KeyD']) vx = B.PADDLE_SPEED;
+      if (this.slippery) vx *= 0.4; // keyboard also sluggish
       this.paddleX += vx * dt;
     }
 
@@ -1548,6 +1559,12 @@ export class Game {
         ball.vy = Math.abs(ball.vy) * Math.sign(dy || 1);
         ball.y = bestBrick.y + Math.sign(dy || 1) * (B.BRICK_HEIGHT / 2 + B.BALL_RADIUS + 0.5);
       }
+      // Dead Cat Bounce: randomize angle after brick hit
+      if (this.chaosAngle) {
+        const angle = Math.atan2(ball.vy, ball.vx) + (Math.random() - 0.5) * 1.2;
+        ball.vx = Math.cos(angle) * ball.speed;
+        ball.vy = Math.sin(angle) * ball.speed;
+      }
     }
 
     this.hitBrick(bestBrick);
@@ -1744,7 +1761,7 @@ export class Game {
     const pool = usePositive ? POSITIVE_POWERUPS : NEGATIVE_POWERUPS;
     const def = pool[Math.floor(Math.random() * pool.length)];
 
-    const mesh = this.r.makePowerup(def.color);
+    const mesh = this.r.makePowerup(def.color, def.positive);
     this.r.scene.add(mesh);
     this.r.setPos(mesh, x, y);
 
@@ -1761,9 +1778,17 @@ export class Game {
         continue;
       }
       pu.y += pu.vy * dt;
-      this.r.setPos(pu.mesh, pu.x, pu.y);
-      pu.mesh.rotation.y += dt * 2;
-      pu.mesh.rotation.z += dt * 1.5;
+      if (pu.def.positive) {
+        this.r.setPos(pu.mesh, pu.x, pu.y);
+        pu.mesh.rotation.y += dt * 2;
+        pu.mesh.rotation.z += dt * 1.5;
+      } else {
+        // Negative: wobble side-to-side as warning
+        const wobble = Math.sin(pu.y * 0.15) * 8;
+        this.r.setPos(pu.mesh, pu.x + wobble, pu.y);
+        pu.mesh.rotation.y += dt * 4;
+        pu.mesh.rotation.x += dt * 2;
+      }
 
       if (pu.y > GAME_HEIGHT + 30) {
         this.r.remove(pu.mesh);
@@ -1852,6 +1877,16 @@ export class Game {
           ball.vy = norm.vy;
         }
         this.addTimedEffect(def.id, def.duration / 1000, () => {});
+        break;
+
+      case 'rugPull':
+        this.slippery = true;
+        this.addTimedEffect(def.id, def.duration / 1000, () => { this.slippery = false; });
+        break;
+
+      case 'deadCat':
+        this.chaosAngle = true;
+        this.addTimedEffect(def.id, def.duration / 1000, () => { this.chaosAngle = false; });
         break;
     }
   }
@@ -2393,6 +2428,8 @@ export class Game {
     this.comboCount = 0;
     this.comboTimer = 0;
     this.piercing = false;
+    this.slippery = false;
+    this.chaosAngle = false;
     this.laserActive = false;
 
     const rektPhrases = ['LIQUIDATED!', 'REKT!', 'STOP LOSS HIT!', 'MARGIN CALL!', 'RUGGED!'];
@@ -2491,6 +2528,8 @@ export class Game {
     this.activeEffects = [];
     this.laserActive = false;
     this.piercing = false;
+    this.slippery = false;
+    this.chaosAngle = false;
     this.removeShield();
 
     // Clean up boss
