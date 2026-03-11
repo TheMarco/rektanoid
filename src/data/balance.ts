@@ -7,7 +7,7 @@ export const PADDLE_WIDTH_EXPANDED = 120;
 export const PADDLE_WIDTH_SHRUNK = 48;
 
 // ── Ball ──
-export const BALL_RADIUS = 3;
+export const BALL_RADIUS = 4.5;
 export const BALL_BASE_SPEED = 420;
 export const BALL_MIN_SPEED = 360;
 export const BALL_SPEED_CAP = 640;

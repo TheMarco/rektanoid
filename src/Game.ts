@@ -343,7 +343,12 @@ export class Game {
   private showMenu() {
     this.state = 'menu';
     this.clearAll();
-    this.r.setLevelTheme(0);
+    // Black scene with subtle background art, no bloom
+    this.r.scene.fog = null;
+    this.r.scene.background = new THREE.Color(0x000000);
+    this.r.webgl.toneMappingExposure = 1.0;
+    this.r.setBloom(false);
+    this.r.clearBackground();
     const bg = buildBackground(this.r, 0);
     this.r.bgGroup.add(bg);
     this.r.setOverlayScreen({
@@ -356,6 +361,7 @@ export class Game {
   }
 
   private startGame() {
+    this.r.setBloom(true);
     this.clearAll();
     this.score = 0;
     this.lives = this.riskProfile.modifiers.lives;
@@ -389,6 +395,7 @@ export class Game {
     this.r.setLevelTheme(this.currentLevel);
     const bg = buildBackground(this.r, this.currentLevel);
     this.r.bgGroup.add(bg);
+    this.r.dimBackground(0.15);
 
     // Paddle
     this.paddleWidth = B.PADDLE_WIDTH;
@@ -1292,6 +1299,10 @@ export class Game {
 
       // Update visual
       this.r.setPos(ball.mesh, ball.x, ball.y);
+      if (this.ballLaunched) {
+        const speed = Math.hypot(ball.vx, ball.vy);
+        ball.mesh.rotation.z -= speed * dt * 0.012;
+      }
 
       // Update trail — distance-based for consistent length across frame rates
       const wp = this.r.toWorld(ball.x, ball.y);

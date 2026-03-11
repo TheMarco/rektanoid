@@ -12,6 +12,29 @@ import type { BossDefinition } from './types/BossTypes';
 const HW = GAME_WIDTH / 2;
 const HH = GAME_HEIGHT / 2;
 
+// Additive blend shader: composites bloom texture on top of base scene
+const AdditiveBlendShader = {
+  uniforms: {
+    baseTexture: { value: null as THREE.Texture | null },
+    bloomTexture: { value: null as THREE.Texture | null },
+  },
+  vertexShader: /* glsl */`
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: /* glsl */`
+    uniform sampler2D baseTexture;
+    uniform sampler2D bloomTexture;
+    varying vec2 vUv;
+    void main() {
+      gl_FragColor = texture2D(baseTexture, vUv) + texture2D(bloomTexture, vUv);
+    }
+  `,
+};
+
 // Canvas overlay screen types (rendered through CRT + bloom)
 type OverlayScreen =
   | { type: 'menu'; riskProfiles: { id: string; label: string; name: string; description: string; color: string }[] }
@@ -76,16 +99,16 @@ const LEVEL_THEMES: {
   bloomRadius: number;
   exposure: number;
 }[] = [
-  { bg: 0x010a06, fog: 0x021a0c, accent: 0x00ff88, fogDensity: 0.0013, bloomStrength: 0.225, bloomRadius: 0.40, exposure: 1.15 }, // Genesis Block
-  { bg: 0x010a06, fog: 0x021a0c, accent: 0x00ff88, fogDensity: 0.0012, bloomStrength: 0.225, bloomRadius: 0.40, exposure: 1.15 }, // Bull Trap
-  { bg: 0x180709, fog: 0x3a1115, accent: 0xff4b44, fogDensity: 0.0010, bloomStrength: 0.225, bloomRadius: 0.40, exposure: 1.22 }, // Liquidation
-  { bg: 0x0a0800, fog: 0x1a1000, accent: 0xffaa00, fogDensity: 0.0013, bloomStrength: 0.225, bloomRadius: 0.40, exposure: 1.15 }, // Pump & Dump
-  { bg: 0x020810, fog: 0x041420, accent: 0x44ddff, fogDensity: 0.0014, bloomStrength: 0.225, bloomRadius: 0.40, exposure: 1.15 }, // Diamond Hands
-  { bg: 0x180709, fog: 0x381117, accent: 0xff5160, fogDensity: 0.0010, bloomStrength: 0.225, bloomRadius: 0.40, exposure: 1.22 }, // Bear Market
-  { bg: 0x060804, fog: 0x0c1008, accent: 0xffaa00, fogDensity: 0.0013, bloomStrength: 0.225, bloomRadius: 0.40, exposure: 1.15 }, // Halving
-  { bg: 0x020810, fog: 0x041420, accent: 0x44ddff, fogDensity: 0.0014, bloomStrength: 0.225, bloomRadius: 0.40, exposure: 1.12 }, // DeFi Maze
-  { bg: 0x190809, fog: 0x3d1512, accent: 0xff5c47, fogDensity: 0.0010, bloomStrength: 0.225, bloomRadius: 0.40, exposure: 1.24 }, // Margin Call
-  { bg: 0x060210, fog: 0x0c0420, accent: 0x8844ff, fogDensity: 0.0014, bloomStrength: 0.225, bloomRadius: 0.40, exposure: 1.15 }, // Flippening
+  { bg: 0x010a06, fog: 0x021a0c, accent: 0x00ff88, fogDensity: 0.0013, bloomStrength: 0.12, bloomRadius: 0.25, exposure: 1.15 }, // Genesis Block
+  { bg: 0x010a06, fog: 0x021a0c, accent: 0x00ff88, fogDensity: 0.0012, bloomStrength: 0.12, bloomRadius: 0.25, exposure: 1.15 }, // Bull Trap
+  { bg: 0x180709, fog: 0x3a1115, accent: 0xff4b44, fogDensity: 0.0010, bloomStrength: 0.12, bloomRadius: 0.25, exposure: 1.22 }, // Liquidation
+  { bg: 0x0a0800, fog: 0x1a1000, accent: 0xffaa00, fogDensity: 0.0013, bloomStrength: 0.12, bloomRadius: 0.25, exposure: 1.15 }, // Pump & Dump
+  { bg: 0x020810, fog: 0x041420, accent: 0x44ddff, fogDensity: 0.0014, bloomStrength: 0.12, bloomRadius: 0.25, exposure: 1.15 }, // Diamond Hands
+  { bg: 0x180709, fog: 0x381117, accent: 0xff5160, fogDensity: 0.0010, bloomStrength: 0.12, bloomRadius: 0.25, exposure: 1.22 }, // Bear Market
+  { bg: 0x060804, fog: 0x0c1008, accent: 0xffaa00, fogDensity: 0.0013, bloomStrength: 0.12, bloomRadius: 0.25, exposure: 1.15 }, // Halving
+  { bg: 0x020810, fog: 0x041420, accent: 0x44ddff, fogDensity: 0.0014, bloomStrength: 0.12, bloomRadius: 0.25, exposure: 1.12 }, // DeFi Maze
+  { bg: 0x190809, fog: 0x3d1512, accent: 0xff5c47, fogDensity: 0.0010, bloomStrength: 0.12, bloomRadius: 0.25, exposure: 1.24 }, // Margin Call
+  { bg: 0x060210, fog: 0x0c0420, accent: 0x8844ff, fogDensity: 0.0014, bloomStrength: 0.12, bloomRadius: 0.25, exposure: 1.15 }, // Flippening
 ];
 
 export class Renderer {
@@ -94,9 +117,14 @@ export class Renderer {
   webgl: THREE.WebGLRenderer;
   composer: EffectComposer;
   bloom: UnrealBloomPass;
+  bloomComposer: EffectComposer;
+  private blendPass: ShaderPass;
   crt: ShaderPass;
   bgGroup: THREE.Group;
   fxGroup: THREE.Group;
+  private darkMaterials: Map<string, THREE.Material | THREE.Material[]> = new Map();
+  private bloomDarkMesh = new THREE.MeshBasicMaterial({ color: 0x000000, toneMapped: false });
+  private bloomDarkLine = new THREE.LineBasicMaterial({ color: 0x000000, toneMapped: false });
   private container: HTMLElement;
   private hudEl: HTMLElement;
   private overlayEl: HTMLElement;
@@ -203,22 +231,30 @@ export class Renderer {
     );
     this.hudScene.add(hudMesh);
 
-    // Post-processing
-    this.composer = new EffectComposer(this.webgl);
-    this.composer.addPass(new RenderPass(this.scene, this.camera));
-    // Render HUD scene on top (clear=false keeps the main scene)
-    const hudRenderPass = new RenderPass(this.hudScene, this.hudCamera);
-    hudRenderPass.clear = false;
-    this.composer.addPass(hudRenderPass);
-
+    // Post-processing: selective bloom via two composers
+    // 1. Bloom composer — renders only bloom-layer objects, applies bloom
+    this.bloomComposer = new EffectComposer(this.webgl);
+    this.bloomComposer.renderToScreen = false;
+    this.bloomComposer.addPass(new RenderPass(this.scene, this.camera));
     this.bloom = new UnrealBloomPass(
       new THREE.Vector2(Math.floor(GAME_WIDTH/2), Math.floor(GAME_HEIGHT/2)),
       initialTheme.bloomStrength,  // strength
       initialTheme.bloomRadius, // radius
-      0.15,  // threshold
+      0.4,  // threshold
     );
-    this.bloom.enabled = false; // Disabled — CRT shader handles glow, bloom caused non-uniform haze
-    this.composer.addPass(this.bloom);
+    this.bloomComposer.addPass(this.bloom);
+
+    // 2. Final composer — renders full scene + HUD, then blends in bloom
+    this.composer = new EffectComposer(this.webgl);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    const hudRenderPass = new RenderPass(this.hudScene, this.hudCamera);
+    hudRenderPass.clear = false;
+    this.composer.addPass(hudRenderPass);
+
+    this.blendPass = new ShaderPass(AdditiveBlendShader, 'baseTexture');
+    this.blendPass.uniforms.bloomTexture.value = this.bloomComposer.renderTarget2.texture;
+    this.composer.addPass(this.blendPass);
+
     this.crt = createCRTPass();
     this.composer.addPass(this.crt);
     this.composer.addPass(new OutputPass());
@@ -265,61 +301,41 @@ export class Renderer {
     }
 
     const group = new THREE.Group();
-    const depth = 6;
     const hw = (w - 1) / 2, hh = (h - 1) / 2;
 
-    // Build custom wireframe with internal detail per brick type
+    // Build flat wireframe with internal detail per brick type
     const positions: number[] = [];
+    const d = 0; // flat — everything at z=0
 
-    // Outer box edges (front face)
-    positions.push(-hw, -hh, depth / 2, hw, -hh, depth / 2);
-    positions.push(hw, -hh, depth / 2, hw, hh, depth / 2);
-    positions.push(hw, hh, depth / 2, -hw, hh, depth / 2);
-    positions.push(-hw, hh, depth / 2, -hw, -hh, depth / 2);
-    // Back face
-    positions.push(-hw, -hh, -depth / 2, hw, -hh, -depth / 2);
-    positions.push(hw, -hh, -depth / 2, hw, hh, -depth / 2);
-    positions.push(hw, hh, -depth / 2, -hw, hh, -depth / 2);
-    positions.push(-hw, hh, -depth / 2, -hw, -hh, -depth / 2);
-    // Connecting edges
-    positions.push(-hw, -hh, depth / 2, -hw, -hh, -depth / 2);
-    positions.push(hw, -hh, depth / 2, hw, -hh, -depth / 2);
-    positions.push(hw, hh, depth / 2, hw, hh, -depth / 2);
-    positions.push(-hw, hh, depth / 2, -hw, hh, -depth / 2);
+    // Outer rectangle
+    positions.push(-hw, -hh, d, hw, -hh, d);
+    positions.push(hw, -hh, d, hw, hh, d);
+    positions.push(hw, hh, d, -hw, hh, d);
+    positions.push(-hw, hh, d, -hw, -hh, d);
 
-    // Type-specific internal details (front face only for visibility)
-    const d = depth / 2;
+    // Type-specific internal details
     if (def.id === 'standard') {
       // Inner hash cross
       positions.push(-hw * 0.4, 0, d, hw * 0.4, 0, d);
       positions.push(0, -hh * 0.5, d, 0, hh * 0.5, d);
     } else if (def.id === 'tough') {
-      // Double border + reinforcement diagonals
-      const inset = 0.18;
-      const iw = hw * (1 - inset), ih = hh * (1 - inset);
-      positions.push(-iw, -ih, d, iw, -ih, d);
-      positions.push(iw, -ih, d, iw, ih, d);
-      positions.push(iw, ih, d, -iw, ih, d);
-      positions.push(-iw, ih, d, -iw, -ih, d);
-      // Corner braces
-      positions.push(-hw, -hh, d, -iw, -ih, d);
-      positions.push(hw, -hh, d, iw, -ih, d);
-      positions.push(hw, hh, d, iw, ih, d);
-      positions.push(-hw, hh, d, -iw, ih, d);
+      // Horizontal reinforcement line + corner ticks
+      positions.push(-hw * 0.6, 0, d, hw * 0.6, 0, d);
+      // Corner ticks
+      const tick = Math.min(hw, hh) * 0.25;
+      positions.push(-hw, -hh, d, -hw + tick, -hh + tick, d);
+      positions.push(hw, -hh, d, hw - tick, -hh + tick, d);
+      positions.push(hw, hh, d, hw - tick, hh - tick, d);
+      positions.push(-hw, hh, d, -hw + tick, hh - tick, d);
     } else if (def.id === 'tough3') {
-      // Triple-layered with inner diamond core
-      for (const inset of [0.15, 0.35]) {
-        const iw = hw * (1 - inset), ih = hh * (1 - inset);
-        positions.push(-iw, -ih, d, iw, -ih, d);
-        positions.push(iw, -ih, d, iw, ih, d);
-        positions.push(iw, ih, d, -iw, ih, d);
-        positions.push(-iw, ih, d, -iw, -ih, d);
-      }
-      // Inner diamond energy core
-      positions.push(0, -hh * 0.35, d, hw * 0.3, 0, d);
-      positions.push(hw * 0.3, 0, d, 0, hh * 0.35, d);
-      positions.push(0, hh * 0.35, d, -hw * 0.3, 0, d);
-      positions.push(-hw * 0.3, 0, d, 0, -hh * 0.35, d);
+      // Diamond energy core + two horizontal lines
+      positions.push(-hw * 0.5, -hh * 0.3, d, hw * 0.5, -hh * 0.3, d);
+      positions.push(-hw * 0.5, hh * 0.3, d, hw * 0.5, hh * 0.3, d);
+      // Inner diamond
+      positions.push(0, -hh * 0.5, d, hw * 0.3, 0, d);
+      positions.push(hw * 0.3, 0, d, 0, hh * 0.5, d);
+      positions.push(0, hh * 0.5, d, -hw * 0.3, 0, d);
+      positions.push(-hw * 0.3, 0, d, 0, -hh * 0.5, d);
     } else if (def.id === 'explosive') {
       // Radiating star lines from center
       for (let i = 0; i < 8; i++) {
@@ -689,140 +705,173 @@ export class Renderer {
   makePaddle(w: number, h: number): THREE.Group {
     const group = new THREE.Group();
     const hw = w / 2, hh = h / 2;
-    const depth = 6, d = depth / 2;
-
-    // Build custom paddle wireframe with internal details
     const positions: number[] = [];
 
-    // Outer box (front face)
-    positions.push(-hw, -hh, d, hw, -hh, d);
-    positions.push(hw, -hh, d, hw, hh, d);
-    positions.push(hw, hh, d, -hw, hh, d);
-    positions.push(-hw, hh, d, -hw, -hh, d);
-    // Back face
-    positions.push(-hw, -hh, -d, hw, -hh, -d);
-    positions.push(hw, -hh, -d, hw, hh, -d);
-    positions.push(hw, hh, -d, -hw, hh, -d);
-    positions.push(-hw, hh, -d, -hw, -hh, -d);
-    // Connecting edges
-    positions.push(-hw, -hh, d, -hw, -hh, -d);
-    positions.push(hw, -hh, d, hw, -hh, -d);
-    positions.push(hw, hh, d, hw, hh, -d);
-    positions.push(-hw, hh, d, -hw, hh, -d);
+    // ── Sci-fi cruiser hull — flat top, angled chevron tips, inner detail track ──
+    const chevW = hw * 0.2;  // chevron depth at tips
+    const inset = 2;         // inner hull offset
 
-    // Internal circuitry / energy lines (front face)
-    // Central energy channel
-    positions.push(-hw * 0.6, 0, d, hw * 0.6, 0, d);
-    // Vertical ticks along the channel
-    const ticks = 6;
-    for (let t = 0; t < ticks; t++) {
-      const tx = -hw * 0.5 + (t / (ticks - 1)) * hw;
-      positions.push(tx, -hh * 0.35, d, tx, hh * 0.35, d);
-    }
-    // Edge energy nodes (diamond shapes at each end)
+    // Outer hull — flat top, angled bottom corners, chevron tips
+    //   ___________________________
+    //  /                           \      <- chevron tips
+    // <  ___________________________  >
+    //  \_____________________________/
+    //
+    // Top edge: flat
+    positions.push(-hw + chevW, -hh, 0, hw - chevW, -hh, 0);
+    // Right chevron tip
+    positions.push(hw - chevW, -hh, 0, hw, -hh * 0.3, 0);
+    positions.push(hw, -hh * 0.3, 0, hw + 3, 0, 0);       // pointy tip
+    positions.push(hw + 3, 0, 0, hw, hh * 0.3, 0);
+    positions.push(hw, hh * 0.3, 0, hw - chevW, hh, 0);
+    // Bottom edge: flat
+    positions.push(hw - chevW, hh, 0, -hw + chevW, hh, 0);
+    // Left chevron tip
+    positions.push(-hw + chevW, hh, 0, -hw, hh * 0.3, 0);
+    positions.push(-hw, hh * 0.3, 0, -hw - 3, 0, 0);      // pointy tip
+    positions.push(-hw - 3, 0, 0, -hw, -hh * 0.3, 0);
+    positions.push(-hw, -hh * 0.3, 0, -hw + chevW, -hh, 0);
+
+    // Inner hull track (recessed panel line) — follows outer shape but inset
+    const iw = hw - inset, ih = hh - inset, ichev = chevW - 1;
+    positions.push(-iw + ichev, -ih, 0, iw - ichev, -ih, 0);
+    // Right inner chevron
+    positions.push(iw - ichev, -ih, 0, iw, -ih * 0.25, 0);
+    positions.push(iw, -ih * 0.25, 0, iw + 1, 0, 0);
+    positions.push(iw + 1, 0, 0, iw, ih * 0.25, 0);
+    positions.push(iw, ih * 0.25, 0, iw - ichev, ih, 0);
+    // Bottom inner
+    positions.push(iw - ichev, ih, 0, -iw + ichev, ih, 0);
+    // Left inner chevron
+    positions.push(-iw + ichev, ih, 0, -iw, ih * 0.25, 0);
+    positions.push(-iw, ih * 0.25, 0, -iw - 1, 0, 0);
+    positions.push(-iw - 1, 0, 0, -iw, -ih * 0.25, 0);
+    positions.push(-iw, -ih * 0.25, 0, -iw + ichev, -ih, 0);
+
+    // Top rail modules — small rectangular turret/sensor boxes
     for (const side of [-1, 1]) {
-      const nx = side * (hw - 6);
-      const ns = 4;
-      positions.push(nx, -ns, d, nx + ns, 0, d);
-      positions.push(nx + ns, 0, d, nx, ns, d);
-      positions.push(nx, ns, d, nx - ns, 0, d);
-      positions.push(nx - ns, 0, d, nx, -ns, d);
+      const bx = side * hw * 0.55;
+      const bw = 4, bh = 3;
+      positions.push(bx - bw, -hh, 0, bx + bw, -hh, 0);
+      positions.push(bx + bw, -hh, 0, bx + bw, -hh - bh, 0);
+      positions.push(bx + bw, -hh - bh, 0, bx - bw, -hh - bh, 0);
+      positions.push(bx - bw, -hh - bh, 0, bx - bw, -hh, 0);
     }
-    // Angled energy feeds from nodes to edges
-    positions.push(-hw, 0, d, -hw + 8, -hh * 0.4, d);
-    positions.push(-hw, 0, d, -hw + 8, hh * 0.4, d);
-    positions.push(hw, 0, d, hw - 8, -hh * 0.4, d);
-    positions.push(hw, 0, d, hw - 8, hh * 0.4, d);
+
+    // Center module — wider box on the inner rail
+    const cmw = 5, cmh = hh * 0.5;
+    positions.push(-cmw, -cmh, 0, cmw, -cmh, 0);
+    positions.push(cmw, -cmh, 0, cmw, cmh, 0);
+    positions.push(cmw, cmh, 0, -cmw, cmh, 0);
+    positions.push(-cmw, cmh, 0, -cmw, -cmh, 0);
+
+    // Side detail modules — small squares along the inner track
+    for (const side of [-1, 1]) {
+      const sx = side * hw * 0.35;
+      const ss = 2;
+      positions.push(sx - ss, -ss, 0, sx + ss, -ss, 0);
+      positions.push(sx + ss, -ss, 0, sx + ss, ss, 0);
+      positions.push(sx + ss, ss, 0, sx - ss, ss, 0);
+      positions.push(sx - ss, ss, 0, sx - ss, -ss, 0);
+    }
+
+    // Horizontal energy rail connecting inner modules
+    positions.push(-iw + ichev + 2, 0, 0, -cmw - 1, 0, 0);
+    positions.push(cmw + 1, 0, 0, iw - ichev - 2, 0, 0);
 
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     const thickGeo = thickenGeo(geo, 0.08, 2);
 
+    // Bright wireframe hull — HDR
     const core = new THREE.LineSegments(thickGeo,
       new THREE.LineBasicMaterial({
-        color: 0x44ddff, transparent: true, opacity: 0.45,
+        color: 0xccaa33, transparent: true, opacity: 0.9,
         fog: false, toneMapped: false,
       }));
     core.renderOrder = 5;
     group.add(core);
 
-    // Fill with gradient-like effect (two layers)
-    const fill = new THREE.Mesh(
-      new THREE.PlaneGeometry(w - 2, h - 2),
+    // Hull fill — subtle interior
+    const hullShape = new THREE.Shape();
+    hullShape.moveTo(-hw + chevW, -hh);
+    hullShape.lineTo(hw - chevW, -hh);
+    hullShape.lineTo(hw, -hh * 0.3);
+    hullShape.lineTo(hw + 3, 0);
+    hullShape.lineTo(hw, hh * 0.3);
+    hullShape.lineTo(hw - chevW, hh);
+    hullShape.lineTo(-hw + chevW, hh);
+    hullShape.lineTo(-hw, hh * 0.3);
+    hullShape.lineTo(-hw - 3, 0);
+    hullShape.lineTo(-hw, -hh * 0.3);
+    hullShape.closePath();
+    const hullFill = new THREE.Mesh(
+      new THREE.ShapeGeometry(hullShape),
       new THREE.MeshBasicMaterial({
-        color: 0x44ddff, transparent: true, opacity: 0.04,
-        side: THREE.DoubleSide, fog: false,
+        color: 0xaa8822, transparent: true, opacity: 0.06,
+        side: THREE.DoubleSide, fog: false, toneMapped: false,
       }));
-    group.add(fill);
+    group.add(hullFill);
 
-    // Energy field glow (wider than the paddle)
+    // Outer energy glow
     const glow = new THREE.LineSegments(thickGeo.clone(),
       new THREE.LineBasicMaterial({
-        color: 0x44ddff, transparent: true, opacity: 0.10,
+        color: 0xbbaa44, transparent: true, opacity: 0.25,
         blending: THREE.AdditiveBlending,
         depthTest: false, depthWrite: false,
         fog: false, toneMapped: false,
       }));
-    glow.scale.setScalar(1.06);
+    glow.scale.setScalar(1.08);
     glow.renderOrder = 4;
     group.add(glow);
 
-    // Extra wide energy field halo
-    const fieldPositions = new Float32Array([
-      -hw * 1.1, 0, 0, hw * 1.1, 0, 0,
-      -hw * 0.9, -hh * 1.3, 0, hw * 0.9, -hh * 1.3, 0,
-    ]);
-    const fieldGeo = new THREE.BufferGeometry();
-    fieldGeo.setAttribute('position', new THREE.Float32BufferAttribute(fieldPositions, 3));
-    const field = new THREE.LineSegments(fieldGeo,
-      new THREE.LineBasicMaterial({
-        color: 0x44ddff, transparent: true, opacity: 0.06,
-        blending: THREE.AdditiveBlending,
-        depthTest: false, depthWrite: false,
-        fog: false, toneMapped: false,
-      }));
-    field.renderOrder = 3;
-    group.add(field);
-
+    group.userData.bloom = true;
     return group;
   }
 
   makeBall(radius: number): THREE.Group {
     const group = new THREE.Group();
-    const sphere = new THREE.IcosahedronGeometry(radius, 1);
-    const edges = new THREE.EdgesGeometry(sphere);
-    const thickGeo = thickenEdgesGeo(edges, 0.1, 2);
+    const r = radius;
 
-    const core = new THREE.LineSegments(thickGeo,
+    // Filled circle disc — bright white
+    const disc = new THREE.Mesh(
+      new THREE.CircleGeometry(r, 32),
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff, toneMapped: false,
+        fog: false,
+      }));
+    disc.renderOrder = 6;
+    group.add(disc);
+
+    // Cross lines cut through the disc and extend past the edge
+    const cr = r * 1.6; // cross extends well beyond the circle
+    const crossPositions: number[] = [];
+    crossPositions.push(-cr, 0, 0.1, cr, 0, 0.1);   // horizontal
+    crossPositions.push(0, -cr, 0.1, 0, cr, 0.1);   // vertical
+    const crossGeo = new THREE.BufferGeometry();
+    crossGeo.setAttribute('position', new THREE.Float32BufferAttribute(crossPositions, 3));
+    const crossThick = thickenGeo(crossGeo, 0.8, 4);
+    const cross = new THREE.LineSegments(crossThick,
       new THREE.LineBasicMaterial({
-        color: 0x44ddff, transparent: true, opacity: 0.9,
+        color: 0x000000, transparent: true, opacity: 1.0,
         fog: false, toneMapped: false,
       }));
-    core.renderOrder = 6;
-    group.add(core);
+    cross.renderOrder = 7;
+    group.add(cross);
 
-    // Inner glow sphere
-    const glowSphere = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(radius * 0.7, 1),
+    // Outer glow halo for bloom
+    const haloDisc = new THREE.Mesh(
+      new THREE.CircleGeometry(r * 1.4, 32),
       new THREE.MeshBasicMaterial({
-        color: 0xffffff, transparent: true, opacity: 0.25,
-        blending: THREE.AdditiveBlending,
-        depthTest: false,
-      }));
-    group.add(glowSphere);
-
-    // Outer glow
-    const outerGlow = new THREE.LineSegments(thickGeo.clone(),
-      new THREE.LineBasicMaterial({
-        color: 0x44ddff, transparent: true, opacity: 0.2,
+        color: 0x88eeff, transparent: true, opacity: 0.35,
         blending: THREE.AdditiveBlending,
         depthTest: false, depthWrite: false,
-        fog: false, toneMapped: false,
+        toneMapped: false, fog: false,
       }));
-    outerGlow.scale.setScalar(1.3);
-    outerGlow.renderOrder = 5;
-    group.add(outerGlow);
+    haloDisc.renderOrder = 5;
+    group.add(haloDisc);
 
+    group.userData.bloom = true;
     return group;
   }
 
@@ -832,6 +881,7 @@ export class Renderer {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(maxPts * 2 * 3), 3));
     geo.setAttribute('alpha', new THREE.Float32BufferAttribute(new Float32Array(maxPts * 2), 1));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(maxPts * 2 * 2), 2));
     geo.setIndex([]);
 
     const mat = new THREE.ShaderMaterial({
@@ -839,28 +889,39 @@ export class Renderer {
       blending: THREE.AdditiveBlending,
       depthTest: false,
       depthWrite: false,
+      toneMapped: false,
       uniforms: {
-        color: { value: new THREE.Color(0x66ddff) },
+        color: { value: new THREE.Color(0x88eeff) },
       },
       vertexShader: `
         attribute float alpha;
         varying float vAlpha;
+        varying vec2 vUv;
         void main() {
           vAlpha = alpha;
+          vUv = uv;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }
       `,
       fragmentShader: `
         uniform vec3 color;
         varying float vAlpha;
+        varying vec2 vUv;
         void main() {
-          gl_FragColor = vec4(color * (1.0 + vAlpha * 1.5), vAlpha);
+          // Soft edge falloff — distance from center axis (v=0.5)
+          float edge = abs(vUv.y - 0.5) * 2.0; // 0 at center, 1 at edge
+          float soft = 1.0 - edge * edge;       // quadratic falloff
+          float a = vAlpha * soft;
+          float brightness = 1.0 + vAlpha * 4.0;
+          vec3 col = mix(color, vec3(1.0), vAlpha * 0.5);
+          gl_FragColor = vec4(col * brightness, a);
         }
       `,
     });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.frustumCulled = false;
     mesh.renderOrder = 4;
+    mesh.userData.bloom = true;
     return mesh;
   }
 
@@ -873,11 +934,13 @@ export class Renderer {
 
     const posAttr = trail.geometry.getAttribute('position') as THREE.BufferAttribute;
     const alphaAttr = trail.geometry.getAttribute('alpha') as THREE.BufferAttribute;
+    const uvAttr = trail.geometry.getAttribute('uv') as THREE.BufferAttribute;
     const pos = posAttr.array as Float32Array;
     const alpha = alphaAttr.array as Float32Array;
+    const uv = uvAttr.array as Float32Array;
     const indices: number[] = [];
 
-    const maxWidth = 2.5; // widest point near the ball
+    const maxWidth = 7; // widest point near the ball — wide enough for bloom to catch
 
     for (let i = 0; i < count; i++) {
       const t = count > 1 ? i / (count - 1) : 0; // 0=tail, 1=head
@@ -911,6 +974,11 @@ export class Renderer {
       pos[(vi + 1) * 3 + 2] = z;
       alpha[vi] = a;
       alpha[vi + 1] = a;
+      // UVs: u = along trail, v = across (0=left edge, 1=right edge)
+      uv[vi * 2] = t;
+      uv[vi * 2 + 1] = 0;       // left side
+      uv[(vi + 1) * 2] = t;
+      uv[(vi + 1) * 2 + 1] = 1; // right side
 
       if (i < count - 1) {
         const ci = i * 2;
@@ -920,6 +988,7 @@ export class Renderer {
 
     posAttr.needsUpdate = true;
     alphaAttr.needsUpdate = true;
+    uvAttr.needsUpdate = true;
     trail.geometry.setIndex(indices);
     trail.geometry.setDrawRange(0, indices.length);
   }
@@ -929,25 +998,38 @@ export class Renderer {
     const geo = new THREE.EdgesGeometry(new THREE.OctahedronGeometry(10, 0));
     const thickGeo = thickenEdgesGeo(geo, 0.08, 2);
 
+    // Bright wireframe core — HDR color for bloom
     const core = new THREE.LineSegments(thickGeo,
       new THREE.LineBasicMaterial({
-        color, transparent: true, opacity: 0.85,
+        color: 0xffffff, transparent: true, opacity: 0.95,
         fog: false, toneMapped: false,
       }));
     core.renderOrder = 5;
     group.add(core);
 
+    // Inner glow sphere — white-hot center
+    const glowSphere = new THREE.Mesh(
+      new THREE.OctahedronGeometry(7, 0),
+      new THREE.MeshBasicMaterial({
+        color: 0xffffff, transparent: true, opacity: 0.4,
+        blending: THREE.AdditiveBlending,
+        depthTest: false, toneMapped: false,
+      }));
+    group.add(glowSphere);
+
+    // Outer colored halo
     const glow = new THREE.LineSegments(thickGeo.clone(),
       new THREE.LineBasicMaterial({
-        color, transparent: true, opacity: 0.25,
+        color, transparent: true, opacity: 0.4,
         blending: THREE.AdditiveBlending,
         depthTest: false, depthWrite: false,
         fog: false, toneMapped: false,
       }));
-    glow.scale.setScalar(1.3);
+    glow.scale.setScalar(1.5);
     glow.renderOrder = 4;
     group.add(glow);
 
+    group.userData.bloom = true;
     return group;
   }
 
@@ -956,11 +1038,11 @@ export class Renderer {
     const geo = new THREE.BufferGeometry();
     const positions = new Float32Array([0, -6, 0, 0, 6, 0]);
     geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    const thickGeo = thickenGeo(geo, 0.12, 2);
+    const thickGeo = thickenGeo(geo, 0.8, 4);
 
     const core = new THREE.LineSegments(thickGeo,
       new THREE.LineBasicMaterial({
-        color: 0xff4444, transparent: true, opacity: 0.9,
+        color: 0xff6666, transparent: true, opacity: 1.0,
         fog: false, toneMapped: false,
       }));
     core.renderOrder = 6;
@@ -968,7 +1050,7 @@ export class Renderer {
 
     const glow = new THREE.LineSegments(thickGeo.clone(),
       new THREE.LineBasicMaterial({
-        color: 0xff4444, transparent: true, opacity: 0.4,
+        color: 0xff4444, transparent: true, opacity: 0.5,
         blending: THREE.AdditiveBlending,
         depthTest: false, depthWrite: false,
         fog: false, toneMapped: false,
@@ -977,6 +1059,7 @@ export class Renderer {
     glow.renderOrder = 5;
     group.add(glow);
 
+    group.userData.bloom = true;
     return group;
   }
 
@@ -1737,7 +1820,7 @@ export class Renderer {
         vz: (Math.random() - 0.5) * 60,
         life: 1, decay: 0.6 + Math.random() * 0.5,
         color,
-        size: 14 + Math.random() * 12,
+        size: 8 + Math.random() * 6,
         hot: true,
       });
     }
@@ -1765,7 +1848,7 @@ export class Renderer {
     for (let i = 0; i < shardDebris; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 80 + Math.random() * 180;
-      const len = 5 + Math.random() * 10;
+      const len = 2 + Math.random() * 3;
       const debrisGeo = new THREE.BufferGeometry();
       debrisGeo.setAttribute('position', new THREE.Float32BufferAttribute([-len, 0, 0, len, 0, 0], 3));
       const debrisColor = new THREE.Color(c).multiplyScalar(2.0);
@@ -1933,7 +2016,7 @@ export class Renderer {
     for (let i = 0; i < expDebris; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = 80 + Math.random() * 200;
-      const len = 5 + Math.random() * 12;
+      const len = 2 + Math.random() * 3;
       const debrisGeo = new THREE.BufferGeometry();
       debrisGeo.setAttribute('position', new THREE.Float32BufferAttribute([-len, 0, 0, len, 0, 0], 3));
       const debrisMat = new THREE.LineBasicMaterial({
@@ -2333,15 +2416,38 @@ export class Renderer {
   }
 
   // ── Background ──
+  setBloom(enabled: boolean) {
+    this.bloom.enabled = enabled;
+  }
+
+  setSceneBackground(color: number) {
+    (this.scene.background as THREE.Color).setHex(color);
+  }
+
+  setFog(enabled: boolean) {
+    if (enabled) {
+      if (!this.scene.fog) {
+        const theme = LEVEL_THEMES[0];
+        this.scene.fog = new THREE.FogExp2(theme.fog, theme.fogDensity);
+      }
+    } else {
+      this.scene.fog = null;
+    }
+  }
+
   setLevelTheme(levelIndex: number) {
     const theme = LEVEL_THEMES[levelIndex] || LEVEL_THEMES[0];
     (this.scene.background as THREE.Color).setHex(theme.bg);
-    const fog = this.scene.fog as THREE.FogExp2;
-    fog.color.setHex(theme.fog);
-    fog.density = theme.fogDensity;
+    if (this.scene.fog) {
+      const fog = this.scene.fog as THREE.FogExp2;
+      fog.color.setHex(theme.fog);
+      fog.density = theme.fogDensity;
+    } else {
+      this.scene.fog = new THREE.FogExp2(theme.fog, theme.fogDensity);
+    }
     this.bloom.strength = theme.bloomStrength;
     this.bloom.radius = theme.bloomRadius;
-    this.bloom.threshold = 0.15;
+    this.bloom.threshold = 0.4;
     this.webgl.toneMappingExposure = theme.exposure;
   }
 
@@ -2351,6 +2457,29 @@ export class Renderer {
       this.bgGroup.remove(child);
       this.disposeObject3D(child);
     }
+  }
+
+  /** Scale down all background material opacities to keep bg subtle */
+  dimBackground(factor = 0.4) {
+    // Scale material opacities on every renderable object
+    this.bgGroup.traverse((node) => {
+      const o = node as any;
+      if (o.material) {
+        const mat = o.material as THREE.Material & { opacity: number };
+        if (typeof mat.opacity === 'number') {
+          mat.opacity *= factor;
+        }
+      }
+      // Also scale baseOpacity in animation pulses so animate loop doesn't override
+      const state = node.userData.backgroundAnimation as
+        { pulses?: { baseOpacity: number; material: { opacity: number } }[] } | undefined;
+      if (state?.pulses) {
+        for (const pulse of state.pulses) {
+          pulse.baseOpacity *= factor;
+          pulse.material.opacity *= factor;
+        }
+      }
+    });
   }
 
   private disposeObject3D(root: THREE.Object3D) {
@@ -2755,8 +2884,9 @@ export class Renderer {
 
     switch (screen.type) {
       case 'menu': {
-        ctx.fillStyle = 'rgba(0, 6, 4, 0.92)';
-        ctx.fillRect(0, 0, W, H);
+        const tickerH = 36 * sy;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.92)';
+        ctx.fillRect(0, tickerH, W, H - tickerH);
 
         const centerX = W / 2;
         const t = now * 0.001;
@@ -2767,21 +2897,12 @@ export class Renderer {
           const r = (color >> 16) & 0xff;
           const g = (color >> 8) & 0xff;
           const b = color & 0xff;
-          // Outer box at ~40%
-          const dr = Math.round(r * 0.40);
-          const dg = Math.round(g * 0.40);
-          const db = Math.round(b * 0.40);
-          const fillCol = `rgb(${dr},${dg},${db})`;
-          // Internal wireframe at ~55%
-          const wr = Math.round(r * 0.55);
-          const wg = Math.round(g * 0.55);
-          const wb = Math.round(b * 0.55);
-          const wireCol = `rgb(${wr},${wg},${wb})`;
+          // Outer box — match in-game wireframe brightness
+          const fillCol = `rgb(${r},${g},${b})`;
+          // Internal wireframe — slightly brighter
+          const wireCol = `rgb(${Math.min(255, Math.round(r * 1.2))},${Math.min(255, Math.round(g * 1.2))},${Math.min(255, Math.round(b * 1.2))})`;
 
           ctx.globalAlpha = alpha * 1.8 > 1 ? 1 : alpha * 1.8;
-          // Dark fill
-          ctx.fillStyle = `rgba(${Math.round(r*0.12)},${Math.round(g*0.12)},${Math.round(b*0.12)},0.7)`;
-          ctx.fillRect(bx, by, bw, bh);
           // Wireframe outer box
           ctx.strokeStyle = fillCol;
           ctx.lineWidth = 1.5;
@@ -2961,24 +3082,13 @@ export class Renderer {
           }
         }
 
-        // ── Title — dark scrim behind so it doesn't fight bricks ──
+        // ── Title ──
         const titleY = fieldTop + menuLayout.length * rowH * 0.45;
-        const titleSize = Math.round(80 * sy);
-        // Scrim: gradient fade behind title so it doesn't look like a rectangle
-        const scrimTop = titleY - titleSize * 0.8;
-        const scrimBot = titleY + titleSize * 0.8;
-        const scrimGrad = ctx.createLinearGradient(0, scrimTop, 0, scrimBot);
-        scrimGrad.addColorStop(0, 'rgba(0, 3, 2, 0)');
-        scrimGrad.addColorStop(0.25, 'rgba(0, 3, 2, 0.8)');
-        scrimGrad.addColorStop(0.5, 'rgba(0, 3, 2, 0.9)');
-        scrimGrad.addColorStop(0.75, 'rgba(0, 3, 2, 0.8)');
-        scrimGrad.addColorStop(1, 'rgba(0, 3, 2, 0)');
-        ctx.fillStyle = scrimGrad;
-        ctx.fillRect(0, scrimTop, W, scrimBot - scrimTop);
+        const titleSize = Math.round(60 * sy);
         ctx.font = `bold ${titleSize}px "Courier New", monospace`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#003322';
+        ctx.fillStyle = '#88ccdd';
         ctx.fillText('REKTANOID', centerX, titleY);
 
         // ── Subtitle ──
@@ -3075,8 +3185,8 @@ export class Renderer {
           const bxc = bx2;
           const byc = y - btnH / 2;
 
-          // Button fill — barely visible tint
-          ctx.fillStyle = isSelected ? this.dimColor(p.color, 0.04) : '#040806';
+          // Button fill — black
+          ctx.fillStyle = '#000000';
           ctx.fillRect(bxc, byc, btnW, btnH);
 
           // Outer border
@@ -3299,10 +3409,47 @@ export class Renderer {
     ctx.restore();
   }
 
+  /** Check if an object belongs to a bloom group or is tagged for bloom */
+  private isBloomObject(obj: THREE.Object3D): boolean {
+    let cur: THREE.Object3D | null = obj;
+    while (cur) {
+      if (cur === this.bgGroup || cur === this.fxGroup || cur.userData.bloom) return true;
+      cur = cur.parent;
+    }
+    return false;
+  }
+
   // ── Render ──
   render() {
     this.renderHudCanvas();
     this.crt.uniforms.time.value = performance.now() * 0.001;
+
+    // Pass 1: Selective bloom (skip entirely when disabled)
+    if (this.bloom.enabled) {
+      const savedBg = (this.scene.background as THREE.Color).clone();
+      (this.scene.background as THREE.Color).setHex(0x000000);
+      this.scene.traverse((obj) => {
+        const o = obj as any;
+        if ((o.isMesh || o.isLine || o.isPoints) && !this.isBloomObject(obj)) {
+          this.darkMaterials.set(o.uuid, o.material);
+          o.material = o.isLine ? this.bloomDarkLine : this.bloomDarkMesh;
+        }
+      });
+      this.bloomComposer.render();
+
+      // Restore materials
+      this.scene.traverse((obj) => {
+        const o = obj as any;
+        if (this.darkMaterials.has(o.uuid)) {
+          o.material = this.darkMaterials.get(o.uuid)!;
+        }
+      });
+      this.darkMaterials.clear();
+      (this.scene.background as THREE.Color).copy(savedBg);
+    }
+    this.blendPass.enabled = this.bloom.enabled;
+
+    // Pass 2: Render full scene + HUD
     this.composer.render();
   }
 
@@ -3318,6 +3465,7 @@ export class Renderer {
     const renderW = GAME_WIDTH;
     const renderH = GAME_HEIGHT;
     this.webgl.setSize(renderW, renderH, false);
+    this.bloomComposer.setSize(renderW, renderH);
     this.composer.setSize(renderW, renderH);
     this.bloom.resolution.set(Math.floor(renderW/2), Math.floor(renderH/2));
     this.crt.uniforms.resolution.value.set(renderW, renderH);
