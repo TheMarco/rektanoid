@@ -16,7 +16,7 @@ export const BALL_SPEED_TIER_EVERY_HITS = 12;
 export const BALL_SPEED_TIER_ADD = 18;
 export const BALL_MIN_VERTICAL_RATIO = 0.53; // prevent flat angles
 export const BALL_LAUNCH_ANGLE_DEG = -75; // degrees from horizontal (kept for re-launch safety)
-export const BALL_SUBSTEPS = 2;
+export const BALL_SUBSTEPS = 4;
 
 // ── Paddle bounce ──
 export const PADDLE_MAX_BOUNCE_ANGLE_DEG = 58;

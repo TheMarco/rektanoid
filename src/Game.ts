@@ -1487,10 +1487,10 @@ export class Game {
     const gridRows = this.brickGrid.length;
     const gridCols = gridRows > 0 ? this.brickGrid[0].length : 0;
 
-    for (let dr = -1; dr <= 1; dr++) {
+    for (let dr = -2; dr <= 2; dr++) {
       const r = row + dr;
       if (r < 0 || r >= gridRows) continue;
-      for (let dc = -1; dc <= 1; dc++) {
+      for (let dc = -2; dc <= 2; dc++) {
         const c = col + dc;
         if (c < 0 || c >= gridCols) continue;
         const brick = this.brickGrid[r][c];
