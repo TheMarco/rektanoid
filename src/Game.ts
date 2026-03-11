@@ -1559,9 +1559,9 @@ export class Game {
         ball.vy = Math.abs(ball.vy) * Math.sign(dy || 1);
         ball.y = bestBrick.y + Math.sign(dy || 1) * (B.BRICK_HEIGHT / 2 + B.BALL_RADIUS + 0.5);
       }
-      // Dead Cat Bounce: randomize angle after brick hit
+      // Dead Cat Bounce: wildly randomize angle after brick hit
       if (this.chaosAngle) {
-        const angle = Math.atan2(ball.vy, ball.vx) + (Math.random() - 0.5) * 1.2;
+        const angle = Math.atan2(ball.vy, ball.vx) + (Math.random() - 0.5) * 2.8;
         ball.vx = Math.cos(angle) * ball.speed;
         ball.vy = Math.sin(angle) * ball.speed;
       }
