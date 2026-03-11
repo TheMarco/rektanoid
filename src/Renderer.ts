@@ -1047,30 +1047,30 @@ export class Renderer {
       geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
       const thickGeo = thickenGeo(geo, 0.5, 3);
 
-      // Red-tinted wireframe core
+      // Wireframe core in powerup's own color
       const core = new THREE.LineSegments(thickGeo,
         new THREE.LineBasicMaterial({
-          color: 0xff4444, transparent: true, opacity: 0.95,
+          color, transparent: true, opacity: 0.95,
           fog: false, toneMapped: false,
         }));
       core.renderOrder = 5;
       group.add(core);
 
-      // Inner glow — red warning
+      // Inner glow in powerup's color
       const innerGeo = new THREE.TetrahedronGeometry(7, 0);
       innerGeo.rotateX(Math.PI); // point down
       const glowSphere = new THREE.Mesh(innerGeo,
         new THREE.MeshBasicMaterial({
-          color: 0xff2222, transparent: true, opacity: 0.3,
+          color, transparent: true, opacity: 0.3,
           blending: THREE.AdditiveBlending,
           depthTest: false, toneMapped: false,
         }));
       group.add(glowSphere);
 
-      // Outer warning halo — red/orange
+      // Outer halo in powerup's color
       const glow = new THREE.LineSegments(thickGeo.clone(),
         new THREE.LineBasicMaterial({
-          color: 0xff2200, transparent: true, opacity: 0.4,
+          color, transparent: true, opacity: 0.4,
           blending: THREE.AdditiveBlending,
           depthTest: false, depthWrite: false,
           fog: false, toneMapped: false,
