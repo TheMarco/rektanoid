@@ -24,6 +24,7 @@ import { EVENT_DEFINITIONS } from './data/events';
 import { BOSS_DEFINITIONS } from './data/bosses';
 import { STAGE_META } from './data/stageMeta';
 import { RISK_PROFILES, type RiskProfile } from './data/riskProfiles';
+import { playFun } from './systems/PlayFunSDK';
 
 // ── Types ──
 
@@ -196,9 +197,16 @@ export class Game {
   }
 
   start() {
+    playFun.init();
     this.showMenu();
     this.lastTime = performance.now();
     this.loop(this.lastTime);
+  }
+
+  private addScore(points: number) {
+    if (points <= 0) return;
+    this.score += points;
+    playFun.addPoints(points);
   }
 
   // ── Input ──
@@ -478,6 +486,7 @@ export class Game {
     audio.stopAmbient();
     audio.stopMusic();
     audio.gameOver();
+    playFun.endGame();
     const bagVal = (this.score * 100 + 10000).toLocaleString();
     this.r.setOverlayScreen({
       type: 'game-over',
@@ -491,6 +500,7 @@ export class Game {
     audio.stopAmbient();
     audio.stopMusic();
     audio.levelClear();
+    playFun.endGame();
     const moonVal = (this.score * 100 + 10000).toLocaleString();
     const returnPct = (this.score * 0.8).toFixed(0);
     const rp = this.riskProfile;
@@ -1176,7 +1186,7 @@ export class Game {
   private onBossDefeated() {
     // Boss defeat handled by BossSystem - just visual cleanup after animation
     this.r.burst(this.bossSystem.getBoss()!.x, this.bossSystem.getBoss()!.y, 0xffaa00, 40);
-    this.score += 1000;
+    this.addScore(1000);
   }
 
   private onBossDefeatComplete() {
@@ -1185,7 +1195,7 @@ export class Game {
     this.bossSystem.reset();
 
     // Progress to next level
-    this.score += B.SCORE_LEVEL_CLEAR_BONUS;
+    this.addScore(B.SCORE_LEVEL_CLEAR_BONUS);
     this.r.flash(0xffaa00, 0.4);
     audio.levelClear();
 
@@ -1612,7 +1622,7 @@ export class Game {
       const marketMult = this.currentModifiers?.scoreMultiplier ?? 1.0;
       const multiplier = marketMult + this.comboCount * B.SCORE_COMBO_MULTIPLIER;
       const baseScore = brick.scoreValue ?? brick.def.score;
-      this.score += Math.floor(baseScore * multiplier * this.riskProfile.modifiers.scoreMult);
+      this.addScore(Math.floor(baseScore * multiplier * this.riskProfile.modifiers.scoreMult));
 
       // Combo
       this.comboCount++;
@@ -1664,7 +1674,7 @@ export class Game {
       // FOMO bonus — destroyed before timer expired
       if (brick.def.fomo && brick.fomoTimer !== undefined && brick.fomoTimer > 0) {
         const bonus = Math.floor(brick.def.score * 2 * multiplier);
-        this.score += bonus;
+        this.addScore(bonus);
         this.r.showCallout(brick.x, brick.y - 25, 'FOMO BONUS!', '#44ff44', 16, true);
         this.r.burst(brick.x, brick.y, 0x44ff44, 12);
         this.adjustSentiment(5);
@@ -1735,7 +1745,7 @@ export class Game {
         this.r.burst(brick.x, brick.y, 0x88eeff, 18);
         this.r.flash(0x88eeff, 0.15);
         // Extra score bonus
-        this.score += Math.floor(brick.def.score * 2 * multiplier);
+        this.addScore(Math.floor(brick.def.score * 2 * multiplier));
       }
     } else if (brick.alive) {
       this.r.updateBrickDamage(brick.mesh, brick.hp, brick.def.hp);
@@ -2002,7 +2012,7 @@ export class Game {
       for (const ball of this.balls) {
         if (this.circleRect(ball.x, ball.y, B.BALL_RADIUS, h.x, h.y, 12, 28)) {
           this.r.burst(h.x, h.y, 0xff2222, 10);
-          this.score += 5;
+          this.addScore(5);
           this.r.remove(h.mesh);
           this.hazards.splice(i, 1);
           break;
@@ -2167,7 +2177,7 @@ export class Game {
         if (brick.y > GAME_HEIGHT + 40) {
           brick.alive = false;
           this.r.remove(brick.mesh);
-          this.score += Math.floor(brick.def.score * 0.5); // partial score for fallen bricks
+          this.addScore(Math.floor(brick.def.score * 0.5)); // partial score for fallen bricks
         }
       }
     }
@@ -2470,8 +2480,8 @@ export class Game {
       }
 
       this.levelClearing = true;
-      this.score += B.SCORE_LEVEL_CLEAR_BONUS;
-      this.score += this.lives * B.SCORE_LIFE_PRESERVATION_BONUS;
+      this.addScore(B.SCORE_LEVEL_CLEAR_BONUS);
+      this.addScore(this.lives * B.SCORE_LIFE_PRESERVATION_BONUS);
       this.r.flash(0xffaa00, 0.4);
       audio.levelClear();
 

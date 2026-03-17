@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "playdotfun": {
+      "source": "playdotfun/skills",
+      "sourceType": "github",
+      "computedHash": "bb4d2f99c12ccde1b8ecf7df5234ac31cd16192f937c4259896d82912bfd2935"
+    }
+  }
+}
